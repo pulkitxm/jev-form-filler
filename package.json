@@ -6,8 +6,13 @@
   "scripts": {
     "test": "node --test test/*.test.js",
     "test:browser": "node scripts/verify-browser.js",
-    "check": "npm test && npm run test:browser"
+    "check": "npm test && npm run test:browser",
+    "playground": "node scripts/serve-playground.js"
   },
-  "devDependencies": { "playwright": "^1.63.0" },
-  "engines": { "node": ">=22" }
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
 }
