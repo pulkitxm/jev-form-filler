@@ -7,14 +7,14 @@ A browser extension that turns your profile links into reviewed, source-backed f
 1. Open `chrome://extensions` or `edge://extensions` and enable Developer mode.
 2. Choose **Load unpacked** and select this repository's `extension` folder. No build is needed.
 3. Pin **Jev Form Filler** to the toolbar.
-4. Open a profile or form and click the toolbar button. The workspace opens in a new tab linked to that page.
+4. Click the toolbar button to open the popup for your current page. Choose **Manage profile** to open the workspace for setup and imports.
 5. Open **Settings** and enter your TypeSafe API key. If Jev Reader already has a key, Jev Form Filler reuses it automatically.
 
-The workspace follows your system light or dark appearance automatically, including changes while it is open. There is no theme switch.
+The popup and workspace follow your system light or dark appearance automatically, including changes while it is open. There is no theme switch.
 
 ## Connect your sources
 
-- **LinkedIn and X / Twitter:** Open your own profile, load the information you want to import, click the extension toolbar button, and choose **Import open page**. This reads currently loaded profile content. It does not sign in, scroll through an entire account, or bypass access restrictions. Public URL import is also available when the website serves usable HTML.
+- **LinkedIn and X / Twitter:** Open your own profile, load the information you want to import, click the extension toolbar button, choose **Manage profile**, and choose **Import open page**. This reads currently loaded profile content. It does not sign in, scroll through an entire account, or bypass access restrictions. Public URL import is also available when the website serves usable HTML.
 - **GitHub:** Enter a profile URL to import public profile details and up to 20 recently updated public repositories. Repository names, descriptions, links, and languages are included. Forks are excluded. GitHub's unauthenticated rate limits apply; partial imports clearly report repository failures.
 - **Portfolio and other URLs:** Import a page directly, or enable sitemap discovery. Discovery checks `/sitemap.xml`, sitemap declarations in `/robots.txt`, and nested sitemap indexes on the same origin. Choose up to 10 pages per import. Up to 5 sitemap files, 100 discovered URLs, and 30 saved pages are supported.
 
@@ -24,9 +24,11 @@ Site access is requested for each imported origin. Source requests omit cookies.
 
 1. For existing imports, choose **Refresh sources** to recover social links, structured identity metadata, and employment context. Browser-check and sign-in pages are excluded. Choose **Build my profile**: unambiguous structured identity facts are extracted directly, and Jev compares contextual candidates from all sources for the remaining fields. Current company and company website are separate fields.
 2. Review the suggestions and choose **Save profile**. You can edit any detail or enter missing information yourself.
-3. Open a form and click the extension toolbar button. Choose **Fill a form**, then **Scan form**.
+3. Open a form and click the extension toolbar button. The popup automatically scans the form and finds answers from your saved profile.
 4. Review and edit each suggested answer. Existing nonempty fields start unchecked.
-5. Choose **Fill selected fields**. Inspect the original form before submitting it yourself. **Undo fill** restores unchanged filled values while preserving subsequent edits.
+5. Choose **Fill selected**. Inspect the original form before submitting it yourself. **Undo fill** restores unchanged filled values while preserving subsequent edits.
+
+Completed popup suggestions and Undo remain available when you reopen it on the same page. Choose **Scan again** after changing your profile or the form.
 
 Jev provides Choice, Score, and Noul decisions. It does not generate free-form prose. This extension uses Choice to select exact profile facts, form options, and existing passages. Questions requiring newly written prose need a manual answer. Missing information stays unanswered. Profile suggestions with low model confidence are shown for explicit review instead of silently discarded. Form-filling decisions still use a 0.65 confidence threshold. Confidence is a model signal, not a guarantee of factual correctness.
 
