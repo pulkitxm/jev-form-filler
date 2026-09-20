@@ -113,7 +113,10 @@ export function extractDocument(doc, url) {
   return { url, title: title || host, candidates: [...facts.slice(0, 200), ...passages.slice(0, 300)], importedAt: new Date().toISOString(), extractionVersion };
 }
 export function parseHtml(html, url) {
-  return extractDocument(new DOMParser().parseFromString(html, 'text/html'), url);
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  template.content.querySelectorAll('base').forEach(node => node.remove());
+  return extractDocument(new DOMParser().parseFromString(template.innerHTML, 'text/html'), url);
 }
 export function sitemapEntries(xml, origin) {
   const doc = new DOMParser().parseFromString(xml, 'application/xml');
@@ -192,17 +195,25 @@ export async function importGithub(value, options = {}) {
   return { url: user.html_url, title: user.name || username, candidates, warning, extractionVersion, importedAt: new Date().toISOString() };
 }
 export function capturePage() {
-  const root = document.querySelector('main,[role="main"],article') || document.body;
+  let content = document;
+  if (!document.querySelector('main,[role="main"],article')) {
+    for (const frame of document.querySelectorAll('iframe')) {
+      try {
+        if (frame.getClientRects().length && getComputedStyle(frame).visibility !== 'hidden' && frame.contentDocument?.querySelector('main,[role="main"],article')) { content = frame.contentDocument; break; }
+      } catch {}
+    }
+  }
+  const root = content.querySelector('main,[role="main"],article') || content.body;
   const clone = root.cloneNode(true);
   const originals = [...root.querySelectorAll('*')];
   const copies = [...clone.querySelectorAll('*')];
   for (const [index, original] of originals.entries()) {
-    if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'NAV', 'FOOTER', 'ASIDE', 'FORM', 'INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(original.tagName) || original.hidden || original.getAttribute('aria-hidden') === 'true' || getComputedStyle(original).display === 'none' || getComputedStyle(original).visibility === 'hidden') copies[index].remove();
+    if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'NAV', 'FOOTER', 'ASIDE', 'FORM', 'INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(original.tagName) || original.isContentEditable || original.getAttribute('role') === 'dialog' || original.hidden || original.getAttribute('aria-hidden') === 'true' || getComputedStyle(original).display === 'none' || getComputedStyle(original).visibility === 'hidden') copies[index].remove();
   }
   const head = document.createElement('head');
   const title = document.createElement('title');
   title.textContent = document.title;
   head.append(title);
-  for (const meta of document.querySelectorAll('meta[name="description"],meta[property="og:description"],script[type="application/ld+json"]')) head.append(meta.cloneNode(true));
+  for (const meta of content.querySelectorAll('meta[name="description"],meta[property="og:description"],script[type="application/ld+json"]')) head.append(meta.cloneNode(true));
   return { url: location.href, html: `<html>${head.outerHTML}<body>${clone.outerHTML}</body></html>`.slice(0, 1_500_000) };
 }

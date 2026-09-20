@@ -61,6 +61,8 @@ try {
   const tabId = await worker.evaluate(async () => (await chrome.tabs.query({ url: 'https://forms.test/*' }))[0].id);
   const app = await context.newPage();
   const errors = [];
+  const baseErrors = [];
+  app.on('console', message => { if (message.type() === 'error' && message.text().includes('base URI')) baseErrors.push(message.text()); });
   app.on('pageerror', error => errors.push(error.message));
   await app.goto(`chrome-extension://${id}/app.html?tab=${tabId}`);
   await app.getByRole('button', { name: 'Settings', exact: false }).click();
@@ -151,7 +153,7 @@ try {
   await app.setViewportSize({ width: 1440, height: 1100 });
   const checks = await app.evaluate(async () => {
     const { parseHtml, sitemapEntries } = await import('./sources.js');
-    const parsed = parseHtml('<html><head><title>Fixture</title></head><body><h1>Alex</h1><form><p>PRIVATE FORM CONTENT</p></form><script>globalThis.injected=true</script><p>Public profile text</p></body></html>', 'https://portfolio.test/');
+    const parsed = parseHtml('<html><head><title>Fixture</title><base href="https://challenge.test/"></head><body><h1>Alex</h1><form><p>PRIVATE FORM CONTENT</p></form><script>globalThis.injected=true</script><p>Public profile text</p></body></html>', 'https://portfolio.test/');
     return { candidates: parsed.candidates, injected: Boolean(globalThis.injected), sitemap: sitemapEntries('<urlset><url><loc>javascript:alert(1)</loc></url><url><loc>https://other.test/</loc></url><url><loc>https://portfolio.test/about</loc></url></urlset>', 'https://portfolio.test') };
   });
   assert.equal(JSON.stringify(checks.candidates).includes('PRIVATE FORM CONTENT'), false);
@@ -248,6 +250,16 @@ try {
   const imported = (await worker.evaluate(() => chrome.storage.local.get('sources'))).sources;
   assert.ok(imported.some(source => source.url === 'https://www.linkedin.com/in/alex-example/' && source.candidates.some(item => item.value === 'Alex Morgan')));
   assert.equal(linkedinFetches, 0);
+  await profileTab.setContent('<title>Alex Morgan | LinkedIn</title><iframe srcdoc="&lt;main&gt;&lt;h1&gt;Alex Morgan&lt;/h1&gt;&lt;p&gt;Product engineer in London&lt;/p&gt;&lt;div contenteditable&gt;PRIVATE COMPOSE CONTENT&lt;/div&gt;&lt;/main&gt;"></iframe>');
+  await profileTab.frameLocator('iframe').getByRole('heading', { name: 'Alex Morgan' }).waitFor();
+  const framed = await app.evaluate(async () => {
+    const tab = (await chrome.tabs.query({ url: 'https://www.linkedin.com/in/alex-example/*' }))[0];
+    const { capturePage } = await import('./sources.js');
+    return (await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: capturePage }))[0].result;
+  });
+  assert.ok(framed.html.includes('Product engineer in London'));
+  assert.equal(framed.html.includes('PRIVATE COMPOSE CONTENT'), false);
+
   const socialPopup = await context.newPage();
   await profileTab.bringToFront();
   await socialPopup.goto(`chrome-extension://${id}/popup.html`);
@@ -259,6 +271,7 @@ try {
   await app.getByText('API key removed.', { exact: true }).waitFor();
   assert.equal((await worker.evaluate(() => chrome.storage.local.get('apiKey'))).apiKey, undefined);
   assert.deepEqual(errors, []);
+  assert.deepEqual(baseErrors, []);
   assert.ok(requests >= 4);
   console.log('PASS: installed extension, key storage, GitHub import, nested sitemap discovery, profile extraction, answer review, safe filling, undo, stale fields, invalid API key, mobile layout, and untrusted HTML isolation.');
 } finally {
