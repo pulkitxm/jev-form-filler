@@ -28,14 +28,14 @@ export function createCredentialBridge({ runtime, storage, peerId = readerId, no
   const save = async apiKey => {
     const local = await read();
     const credential = await write({ apiKey, updatedAt: Math.max(now(), local.updatedAt + 1) });
-    await publish(credential);
-    return credential;
+    const response = await publish(credential);
+    return { ...credential, shared: Boolean(response?.credential) };
   };
   const remove = async () => {
     const local = await read();
     const credential = await write({ apiKey: null, updatedAt: Math.max(now(), local.updatedAt + 1) });
-    await publish(credential);
-    return credential;
+    const response = await publish(credential);
+    return { ...credential, shared: Boolean(response?.credential) };
   };
   const accept = async incoming => {
     const remote = normalize(incoming);
@@ -48,7 +48,7 @@ export function createCredentialBridge({ runtime, storage, peerId = readerId, no
     if (!response?.credential) return read();
     const remote = normalize(response.credential);
     let local = await read();
-    if (remote.updatedAt > local.updatedAt || (!local.apiKey && remote.apiKey)) local = await write(remote);
+    if (remote.updatedAt > local.updatedAt || (!local.apiKey && remote.apiKey && remote.updatedAt === local.updatedAt)) local = await write(remote);
     else if (local.updatedAt > remote.updatedAt || (local.apiKey && !remote.apiKey)) await publish(local);
     return local;
   };

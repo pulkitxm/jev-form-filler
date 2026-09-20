@@ -22,13 +22,13 @@ Site access is requested for each imported origin. Source requests omit cookies.
 
 ## Build your profile and fill a form
 
-1. Choose **Build my profile**. Jev selects facts from extracted metadata, structured Person data, and text passages. Conflicting facts are checked separately.
+1. For existing imports, choose **Refresh sources** to recover social links, structured identity metadata, and employment context. Browser-check and sign-in pages are excluded. Choose **Build my profile**: unambiguous structured identity facts are extracted directly, and Jev compares contextual candidates from all sources for the remaining fields. Current company and company website are separate fields.
 2. Review the suggestions and choose **Save profile**. You can edit any detail or enter missing information yourself.
 3. Open a form and click the extension toolbar button. Choose **Fill a form**, then **Scan form**.
 4. Review and edit each suggested answer. Existing nonempty fields start unchecked.
 5. Choose **Fill selected fields**. Inspect the original form before submitting it yourself. **Undo fill** restores unchanged filled values while preserving subsequent edits.
 
-Jev provides Choice, Score, and Noul decisions. It does not generate free-form prose. This extension uses Choice to select exact profile facts, form options, and existing passages. Questions requiring newly written prose need a manual answer. Missing or uncertain information stays unanswered; the model decision threshold is 0.65. Confidence is a model signal, not a guarantee of factual correctness.
+Jev provides Choice, Score, and Noul decisions. It does not generate free-form prose. This extension uses Choice to select exact profile facts, form options, and existing passages. Questions requiring newly written prose need a manual answer. Missing information stays unanswered. Profile suggestions with low model confidence are shown for explicit review instead of silently discarded. Form-filling decisions still use a 0.65 confidence threshold. Confidence is a model signal, not a guarantee of factual correctness.
 
 Standard visible text, email, URL, telephone, number, textarea, and single-select controls are supported. Passwords, hidden fields, identified financial/identity credentials, disabled fields, and read-only controls are excluded. Checkboxes, radio buttons, uploads, custom controls, embedded frames, closed shadow roots, and built-in browser pages are not supported. A scan handles up to 60 fields. Changes to a field's value, identity, or page after scanning cause that field to be skipped. Nothing submits the form automatically.
 
@@ -55,3 +55,5 @@ Unit checks cover URL safety, model-output validation, uncertainty handling, aut
 Synthetic screenshots are written to ignored `artifacts/`. No live TypeSafe decision quality or real LinkedIn/X compatibility is claimed by these tests. Reload the extension after changing its files.
 
 API reference: [TypeSafe Choice](https://docs.typesafe.ai/primitives/choice).
+
+To verify key sharing against the actual Reader extension, build Reader first and run `node scripts/verify-sharing.js`. Set `READER_EXTENSION_DIR` if its unpacked extension is not in the sibling `jev-reader/dist/extension` folder. This uses an isolated browser profile and synthetic credentials.

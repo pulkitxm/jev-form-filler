@@ -51,3 +51,21 @@ test('external messages are restricted to the configured Jev peer', async () => 
   const response = await new Promise(resolve => listener({ type: 'JEV_CREDENTIAL_GET' }, { id: 'peer' }, resolve));
   assert.deepEqual(response.credential, { apiKey: 'local-key', updatedAt: 5 });
 });
+
+test('a newer deletion is not overwritten by an older saved peer key', async () => {
+  const storage = memoryStorage({ apiKeyUpdatedAt: 30 });
+  const messages = [];
+  const runtime = { sendMessage: async (id, message) => {
+    messages.push(message);
+    return message.type === 'JEV_CREDENTIAL_GET' ? { credential: { apiKey: 'old-key', updatedAt: 20 } } : {};
+  } };
+  const bridge = createCredentialBridge({ runtime, storage, peerId: 'peer' });
+  assert.deepEqual(await bridge.sync(), { apiKey: null, updatedAt: 30 });
+  assert.equal(messages.at(-1).credential.apiKey, null);
+});
+
+test('saving reports whether the peer acknowledged the credential', async () => {
+  const runtime = { sendMessage: async () => { throw new Error('No receiving extension'); } };
+  const bridge = createCredentialBridge({ runtime, storage: memoryStorage(), peerId: 'peer', now: () => 10 });
+  assert.equal((await bridge.save('synthetic-key')).shared, false);
+});

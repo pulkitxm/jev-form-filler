@@ -200,13 +200,13 @@ $('#settings-form').onsubmit = event => {
   run(async () => {
     const value = $('#api-key').value.trim();
     if (value && (value.length > 512 || /\s/.test(value))) throw new Error('Enter an API key without spaces.');
-    if (value) await credentials.save(value);
+    const saved = value ? await credentials.save(value) : null;
     hasKey = hasKey || Boolean(value);
     $('#api-key').value = '';
     $('#api-key').type = 'password';
     $('#show-key').textContent = 'Show';
     refreshKey();
-    status(value ? 'API key saved and shared with your Jev extensions.' : 'Existing key kept.');
+    status(value ? saved.shared ? 'API key saved and shared with your Jev extensions.' : 'API key saved on this device. Reload both Jev extensions to connect key sharing.' : 'Existing key kept.');
   });
 };
 $('#remove-key').onclick = () => run(async () => {
@@ -376,6 +376,15 @@ $('#undo').onclick = () => run(async () => {
 renderSources();
 renderProfile();
 refreshKey();
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.apiKey) {
+    hasKey = Boolean(changes.apiKey.newValue);
+    refreshKey();
+  }
+});
+window.addEventListener('focus', async () => {
+  try { hasKey = Boolean((await credentials.sync()).apiKey); refreshKey(); } catch {}
+});
 if (targetId) {
   try {
     const tab = await chrome.tabs.get(targetId);
