@@ -44,7 +44,7 @@ async function run(task) {
   catch (error) {
     const message = controller.signal.aborted ? 'Stopped. Completed imports remain saved.' : error.message;
     status(message, true);
-    $('#source-status').textContent = message;
+    if ($('#source-dialog').open) $('#source-status').textContent = message;
   } finally {
     controller = null;
     $('#cancel').hidden = true;
@@ -171,7 +171,7 @@ function renderAnswers() {
     checkbox.dataset.answer = suggestion.field.id;
     checkbox.checked = Boolean(suggestion.answer) && !suggestion.field.value;
     label.append(checkbox, document.createTextNode(suggestion.field.label), create('span', 'badge', suggestion.field.value ? 'Existing value: review before replacing' : suggestion.answer ? 'Source-backed suggestion' : 'Needs your input'));
-    const input = create(suggestion.field.options.length ? 'select' : 'textarea');
+    const input = create(suggestion.field.options.length ? 'select' : suggestion.field.type === 'textarea' ? 'textarea' : 'input');
     input.setAttribute('aria-label', `Answer for ${suggestion.field.label}`);
     input.dataset.value = suggestion.field.id;
     if (suggestion.field.options.length) {
@@ -188,6 +188,7 @@ function renderAnswers() {
 for (const nav of document.querySelectorAll('.nav')) nav.addEventListener('click', () => showView(nav.dataset.view));
 $('#key-shortcut').onclick = () => showView('settings');
 $('#cancel').onclick = () => controller?.abort();
+$('#dismiss-status').onclick = () => $('#status-bar').hidden = true;
 $('#build-profile').onclick = $('#rebuild').onclick = () => run(buildProfile);
 $('#profile-form').onsubmit = event => {
   event.preventDefault();
@@ -292,7 +293,7 @@ $('#source-form').onsubmit = event => {
       signal.throwIfAborted();
       await saveSource(source);
       $('#source-dialog').close();
-      status('Source imported. Build your profile when you’re ready.');
+      status(source.warning || 'Source imported. Build your profile when you’re ready.');
     }
   });
 };

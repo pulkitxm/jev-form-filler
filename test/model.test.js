@@ -21,3 +21,8 @@ test('missing answers fail instead of silently filling', async () => {
 test('select candidates retain actual option values', () => {
   assert.deepEqual(answerCandidates({ options: [{ label: 'Choose', value: '' }, { label: 'Remote', value: 'remote' }] }, {}, []), [{ label: 'Remote', value: 'remote', source: 'Profile match' }]);
 });
+test('abort signals stop TypeSafe work without a fallback answer', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(decide('test', {}, {}, { signal: controller.signal, fetchImpl: async (url, options) => { options.signal.throwIfAborted(); } }), /Stopped/);
+});
