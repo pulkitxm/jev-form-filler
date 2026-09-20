@@ -8,7 +8,7 @@ A browser extension that turns your profile links into reviewed, source-backed f
 2. Choose **Load unpacked** and select this repository's `extension` folder. No build is needed.
 3. Pin **Jev Form Filler** to the toolbar.
 4. Open a profile or form and click the toolbar button. The workspace opens in a new tab linked to that page.
-5. Open **Settings** and enter your TypeSafe API key.
+5. Open **Settings** and enter your TypeSafe API key. If Jev Reader already has a key, Jev Form Filler reuses it automatically.
 
 ## Connect your sources
 
@@ -32,7 +32,7 @@ Standard visible text, email, URL, telephone, number, textarea, and single-selec
 
 ## Data and privacy
 
-Sources, profile values, and the API key are stored in local extension storage, restricted to trusted extension contexts and excluded from browser sync. This is local browser storage, not an encrypted vault. The key is never inserted into website scripts or sent to source websites.
+Sources, profile values, and the API key are stored in local extension storage, restricted to trusted extension contexts and excluded from browser sync. Jev Form Filler shares key saves and removals directly with the fixed Jev Reader extension identity when both extensions are installed. No website can request the key. This is local browser storage, not an encrypted vault. The key is never inserted into website scripts or sent to source websites.
 
 Building a profile sends source candidates directly to `https://api.typesafe.ai/v1/systemone`. Scanning a form sends the saved profile, form labels, option labels, and candidate passages to TypeSafe. These requests may incur usage charges. The extension is client-side, but Jev inference runs remotely at TypeSafe. There is no application backend or telemetry. Source pages are never uploaded to an application server.
 

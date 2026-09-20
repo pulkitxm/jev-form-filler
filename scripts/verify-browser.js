@@ -59,7 +59,7 @@ try {
   await app.getByRole('button', { name: 'Settings', exact: false }).click();
   await app.locator('#api-key').fill('synthetic-test-key');
   await app.getByRole('button', { name: 'Save key', exact: true }).click();
-  await app.getByText('API key saved on this device.', { exact: true }).waitFor();
+  await app.getByText('API key saved and shared with your Jev extensions.', { exact: true }).waitFor();
   assert.equal(await app.locator('#api-key').inputValue(), '');
   await app.getByRole('button', { name: 'Save key', exact: true }).click();
   await app.getByText('Existing key kept.', { exact: true }).waitFor();
