@@ -14,7 +14,7 @@ The popup and workspace follow your system light or dark appearance automaticall
 
 ## Connect your sources
 
-- **LinkedIn and X / Twitter:** Open your own profile, load the information you want to import, click the extension toolbar button, choose **Manage profile**, and choose **Import open page**. This reads currently loaded profile content. It does not sign in, scroll through an entire account, or bypass access restrictions. Public URL import is also available when the website serves usable HTML.
+- **LinkedIn and X / Twitter:** Choose the connector, enter your personal profile URL, and click **Open profile in browser**. Once your profile is visible, click the extension icon and choose **Import this profile**, or return to the workspace and choose **Import loaded profile**. The pending import survives closing the workspace. This uses the rendered page in your browser session, not an anonymous background download. Complete sign-in or browser checks yourself if prompted. Only currently loaded content is imported; scroll to load more sections before importing. Refreshing these sources also reads their open profile tabs.
 - **GitHub:** Enter a profile URL to import public profile details and up to 20 recently updated public repositories. Repository names, descriptions, links, and languages are included. Forks are excluded. GitHub's unauthenticated rate limits apply; partial imports clearly report repository failures.
 - **Portfolio and other URLs:** Import a page directly, or enable sitemap discovery. Discovery checks `/sitemap.xml`, sitemap declarations in `/robots.txt`, and nested sitemap indexes on the same origin. Choose up to 10 pages per import. Up to 5 sitemap files, 100 discovered URLs, and 30 saved pages are supported.
 

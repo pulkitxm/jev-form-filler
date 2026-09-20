@@ -6,12 +6,12 @@ export function socialKind(value) {
     const host = url.hostname.replace(/^www\./, '');
     const path = url.pathname.split('/').filter(Boolean);
     if (host === 'linkedin.com' && path[0] === 'in' && path[1]) return 'linkedin';
-    if (['x.com', 'twitter.com'].includes(host) && path.length === 1 && !['home', 'intent', 'share', 'search', 'explore', 'i'].includes(path[0])) return 'twitter';
+    if (['x.com', 'twitter.com'].includes(host) && path.length === 1 && !['home', 'intent', 'share', 'search', 'explore', 'i', 'login', 'signup', 'settings', 'messages', 'notifications', 'compose'].includes(path[0])) return 'twitter';
     if (host === 'github.com' && path.length === 1 && !['login', 'signup', 'explore', 'features', 'settings'].includes(path[0])) return 'github';
   } catch {}
   return null;
 }
-export const isBlockedPage = title => /checking your browser|just a moment|security verification|access denied|verify (?:you are|you're) human|recaptcha|sign in to linkedin/i.test(title);
+export const isBlockedPage = title => /checking your browser|just a moment|security verification|access denied|verify (?:you are|you're) human|recaptcha|sign in.*linkedin|linkedin.*sign in|join linkedin|linkedin login|log in to x/i.test(title);
 export function extractDocument(doc, url) {
   const title = doc.querySelector('title')?.textContent || '';
   if (isBlockedPage(title)) throw new Error('This is a sign-in or browser-check page, not profile content. Open the actual profile and import the loaded page.');

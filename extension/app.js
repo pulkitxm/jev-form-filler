@@ -1,6 +1,6 @@
 import { listFiles, saveFile, deleteFile, clearFiles, matchFiles, acceptsFile, filePayload } from './files.js';
 import { profileFields, safeUrl, inferProfile, selectedCandidate, decide, answerCandidates, answerQuestion, suggestAnswers } from './model.js';
-import { parseHtml, extractionVersion, isBlockedPage, discoverPages, fetchText, importGithub, capturePage } from './sources.js';
+import { parseHtml, socialKind, extractionVersion, isBlockedPage, discoverPages, fetchText, importGithub, capturePage } from './sources.js';
 import { inspectForm, applyAnswers, undoAnswers, applyFileAnswer } from './forms.js';
 import { createCredentialBridge } from './credentials.js';
 const $ = selector => document.querySelector(selector);
@@ -18,6 +18,12 @@ let sources = (stored.sources || []).map(source => isBlockedPage(source.title) ?
 let profile = stored.profile || {};
 let hasKey = Boolean(stored.apiKey);
 let currentConnector = 'website';
+let pendingProfile = (await chrome.storage.session.get('pendingProfile')).pendingProfile;
+function renderPendingProfile() {
+  $('#pending-profile').hidden = !pendingProfile;
+  if (pendingProfile) $('#pending-profile-message').textContent = `Finish loading ${pendingProfile.url} in its browser tab, then import it here. If the site asks you to sign in or complete a browser check, do that in the profile tab first.`;
+}
+renderPendingProfile();
 let draft = null;
 let profileDiagnostics = {};
 let controller = null;
@@ -239,7 +245,8 @@ for (const button of document.querySelectorAll('[data-connector]')) button.oncli
   currentConnector = button.dataset.connector;
   const names = { linkedin: 'Connect LinkedIn', twitter: 'Connect X / Twitter', github: 'Connect GitHub', website: 'Add a website' };
   $('#source-heading').textContent = names[currentConnector];
-  $('#source-help').textContent = ['linkedin', 'twitter'].includes(currentConnector) ? 'For best results, open your profile, click the extension toolbar button, then choose Import open page. URL imports work only when public HTML is available.' : currentConnector === 'github' ? 'Import your public GitHub profile directly. No GitHub token needed.' : 'Import one page, or discover pages from the site’s sitemap.';
+  $('#source-help').textContent = ['linkedin', 'twitter'].includes(currentConnector) ? 'Open your profile in a browser tab so the site can use your signed-in session. Once your profile is visible, click the extension icon and choose Import this profile, or return here and choose Import loaded profile.' : currentConnector === 'github' ? 'Import your public GitHub profile directly. No GitHub token needed.' : 'Import one page, or discover pages from the site’s sitemap.';
+  $('#connect-source').textContent = ['linkedin', 'twitter'].includes(currentConnector) ? 'Open profile in browser' : 'Import source';
   $('#crawl-row').hidden = currentConnector !== 'website';
   $('#crawl').checked = false;
   $('#source-url').value = '';
@@ -258,10 +265,26 @@ $('#source-form').onsubmit = event => {
     if (currentConnector === 'twitter' && !['x.com', 'twitter.com', 'www.x.com', 'www.twitter.com'].includes(url.hostname)) throw new Error('Enter an X or Twitter profile URL.');
     if (currentConnector === 'github' && url.hostname !== 'github.com') throw new Error('Enter a GitHub profile URL.');
   } catch (error) { $('#source-status').textContent = error.message; return; }
+  if (['linkedin', 'twitter'].includes(currentConnector)) {
+    if (socialKind(url.href) !== currentConnector) { $('#source-status').textContent = 'Enter a personal profile URL, not the feed or a post.'; return; }
+    if (currentConnector === 'linkedin') url.hostname = 'www.linkedin.com';
+    else url.hostname = 'x.com';
+  }
   const origins = currentConnector === 'github' ? ['https://api.github.com/*'] : [`${url.origin}/*`];
   const permission = chrome.permissions.request({ origins });
   run(async signal => {
     if (!await permission) throw new Error('Website access was not granted. No source was imported.');
+    if (['linkedin', 'twitter'].includes(currentConnector)) {
+      const matches = await chrome.tabs.query({ url: `${url.origin}${url.pathname.replace(/\/$/, '')}*` });
+      const existing = matches.find(tab => { try { return new URL(tab.url).pathname.replace(/\/$/, '') === url.pathname.replace(/\/$/, ''); } catch { return false; } });
+      const tab = existing ? await chrome.tabs.update(existing.id, { active: true }) : await chrome.tabs.create({ url: url.href });
+      pendingProfile = { tabId: tab.id, url: url.href, kind: currentConnector };
+      await chrome.storage.session.set({ pendingProfile });
+      renderPendingProfile();
+      $('#source-dialog').close();
+      status('Profile opened. Once it is visible, click the extension icon and choose Import this profile.');
+      return;
+    }
     status('Reading your source…');
     $('#source-status').textContent = 'Reading your source…';
     if ($('#crawl').checked && currentConnector === 'website') {
@@ -314,7 +337,16 @@ $('#refresh-sources').onclick = () => {
       signal.throwIfAborted();
       status(`Refreshing ${refreshed + failures.length + 1} of ${sources.length}: ${source.title}…`);
       try {
-        const updated = source.url.startsWith('https://github.com/') ? await importGithub(source.url, { signal }) : parseHtml(await fetchText(source.url, { signal }), source.url);
+        let updated;
+        if (['linkedin', 'twitter'].includes(socialKind(source.url))) {
+          const url = new URL(source.url);
+          const tabs = await chrome.tabs.query({ url: `${url.origin}${url.pathname.replace(/\/$/, '')}*` });
+          const tab = tabs.find(tab => new URL(tab.url).pathname.replace(/\/$/, '') === url.pathname.replace(/\/$/, ''));
+          if (!tab) throw new Error('Open this profile in a browser tab, then refresh again.');
+          const [result] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: capturePage });
+          if (!result.result || socialKind(result.result.url) !== socialKind(source.url) || new URL(result.result.url).pathname.replace(/\/$/, '') !== url.pathname.replace(/\/$/, '')) throw new Error('The tab navigated away from the profile. Open it again.');
+          updated = parseHtml(result.result.html, result.result.url);
+        } else updated = source.url.startsWith('https://github.com/') ? await importGithub(source.url, { signal }) : parseHtml(await fetchText(source.url, { signal }), source.url);
         signal.throwIfAborted();
         await saveSource(updated);
         refreshed++;
@@ -332,13 +364,25 @@ $('#refresh-sources').onclick = () => {
     status(`${refreshed} sources refreshed. ${failures.length ? failures.join(' ') : 'Build your profile to use the recovered context.'}`, Boolean(failures.length));
   });
 };
-$('#import-open').onclick = () => run(async () => {
-  status('Reading the open page…');
-  const captured = await execute(capturePage);
+async function importProfileTab(tabId, expected) {
+  if (!tabId) throw new Error('Open your profile, click the extension icon, and choose Import this profile.');
+  let results;
+  try { results = await chrome.scripting.executeScript({ target: { tabId }, func: capturePage }); }
+  catch { throw new Error('The profile tab is closed or access has expired. Open your profile and click the extension icon, then choose Import this profile.'); }
+  const captured = results[0]?.result;
+  if (!captured) throw new Error('The profile is still loading. Wait until your details are visible, then try again.');
   safeUrl(captured.url);
+  if (expected && (socialKind(captured.url) !== expected.kind || new URL(captured.url).pathname.replace(/\/$/, '') !== new URL(expected.url).pathname.replace(/\/$/, ''))) throw new Error('The tab is not showing the requested profile yet. Finish signing in or open the profile URL, then try again.');
   await saveSource(parseHtml(captured.html, captured.url));
+  if (pendingProfile?.tabId === tabId) {
+    pendingProfile = null;
+    await chrome.storage.session.remove('pendingProfile');
+    renderPendingProfile();
+  }
   status('Open page imported. Build your profile to review its details.');
-});
+}
+$('#import-connected').onclick = () => run(() => importProfileTab(pendingProfile?.tabId, pendingProfile));
+$('#import-open').onclick = () => run(() => importProfileTab(targetId || pendingProfile?.tabId, !targetId ? pendingProfile : null));
 $('#scan').onclick = () => run(async signal => {
   if (!Object.values(profile).some(fact => fact.value) && !sources.some(source => !source.excluded) && !(await listFiles()).length) throw new Error('Save some profile details before filling a form.');
   status('Finding form fields…');
@@ -386,6 +430,7 @@ renderSources();
 renderProfile();
 refreshKey();
 chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'session' && changes.pendingProfile) { pendingProfile = changes.pendingProfile.newValue; renderPendingProfile(); }
   if (area === 'local' && changes.apiKey) {
     hasKey = Boolean(changes.apiKey.newValue);
     refreshKey();
@@ -446,3 +491,5 @@ $('#file-form').onsubmit = event => {
   });
 };
 if (new URL(location.href).searchParams.get('view') === 'files') showView('files');
+
+if (new URL(location.href).searchParams.get('import') === '1') { showView('sources'); void run(() => importProfileTab(targetId, pendingProfile?.tabId === targetId ? pendingProfile : null)); }

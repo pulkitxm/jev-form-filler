@@ -1,3 +1,4 @@
+import { socialKind } from './sources.js';
 import { undoAnswers } from './forms.js';
 
 const $ = selector => document.querySelector(selector);
@@ -43,6 +44,7 @@ function render(state) {
     $('#file-choices').append(card);
   }
 }
+$('#import-profile').onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL(`app.html?tab=${tabId}&import=1`) });
 $('#manage').onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL(`app.html${tabId ? `?tab=${tabId}` : ''}`) });
 $('#fill').onclick = async () => {
   render({ loading: true, message: 'Preparing to fill your details…' });
@@ -61,6 +63,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 try {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   tabId = tab?.id;
+  $('#import-profile').hidden = !socialKind(tab?.url || '');
   if (!tabId || !/^https?:/.test(tab.url || '')) {
     render({ message: 'Open a form on a webpage, then click Fill Details.' });
     $('#fill').disabled = true;
