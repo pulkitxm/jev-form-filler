@@ -10,6 +10,8 @@ A browser extension that turns your profile links into reviewed, source-backed f
 4. Open a profile or form and click the toolbar button. The workspace opens in a new tab linked to that page.
 5. Open **Settings** and enter your TypeSafe API key. If Jev Reader already has a key, Jev Form Filler reuses it automatically.
 
+The workspace follows your system light or dark appearance automatically, including changes while it is open. There is no theme switch.
+
 ## Connect your sources
 
 - **LinkedIn and X / Twitter:** Open your own profile, load the information you want to import, click the extension toolbar button, and choose **Import open page**. This reads currently loaded profile content. It does not sign in, scroll through an entire account, or bypass access restrictions. Public URL import is also available when the website serves usable HTML.

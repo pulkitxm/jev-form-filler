@@ -12,7 +12,7 @@ await writeFile(join(extension, 'manifest.json'), JSON.stringify(manifest));
 await mkdir('artifacts', { recursive: true });
 const profileHtml = await readFile('fixtures/profile.html', 'utf8');
 const formHtml = await readFile('fixtures/form.html', 'utf8');
-const context = await chromium.launchPersistentContext(join(temporary, 'profile'), { channel: 'chromium', headless: true, viewport: { width: 1440, height: 1100 }, args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`] });
+const context = await chromium.launchPersistentContext(join(temporary, 'profile'), { channel: 'chromium', headless: true, colorScheme: 'light', viewport: { width: 1440, height: 1100 }, args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`] });
 let apiStatus = 200;
 let requests = 0;
 try {
@@ -92,7 +92,7 @@ try {
   assert.equal(await app.locator('[data-answer]:checked').count(), 4);
   assert.equal(await app.locator('.answer-card label').nth(2).textContent(), 'LocationSource-backed suggestion');
   await app.locator('#dismiss-status').click();
-  await app.screenshot({ path: 'artifacts/answer-review.png', fullPage: true });
+  await app.screenshot({ animations: 'disabled', path: 'artifacts/answer-review.png', fullPage: true });
   await app.locator('#apply').click();
   await app.getByText('4 fields filled. 0 skipped. Nothing was submitted.', { exact: true }).waitFor();
   assert.equal(await form.locator('[name="name"]').inputValue(), 'Alex Morgan');
@@ -121,9 +121,25 @@ try {
   apiStatus = 200;
   await app.locator('[data-view="sources"]').click();
   await app.locator('#status-bar').evaluate(node => node.hidden = true);
-  await app.screenshot({ path: 'artifacts/workspace.png', fullPage: true });
+  await app.screenshot({ animations: 'disabled', path: 'artifacts/workspace.png', fullPage: true });
+  await app.emulateMedia({ colorScheme: 'dark' });
+  await app.waitForFunction(() => getComputedStyle(document.documentElement).colorScheme === 'dark');
+  assert.equal(await app.evaluate(() => getComputedStyle(document.body).backgroundColor), 'rgb(25, 23, 30)');
+  await app.waitForFunction(() => getComputedStyle(document.querySelector('.connector')).backgroundColor === 'rgb(35, 31, 42)');
+  await app.screenshot({ animations: 'disabled', path: 'artifacts/workspace-dark.png', fullPage: true });
+  await app.locator('[data-connector="website"]').click();
+  assert.equal(await app.locator('#source-dialog').evaluate(node => getComputedStyle(node).backgroundColor), 'rgb(35, 31, 42)');
+  await app.screenshot({ animations: 'disabled', path: 'artifacts/source-dialog-dark.png', fullPage: true });
+  await app.locator('#close-dialog').click();
+  await app.locator('[data-view="settings"]').click();
+  assert.equal(await app.locator('#api-key').evaluate(node => getComputedStyle(node).backgroundColor), 'rgb(28, 25, 34)');
+  await app.screenshot({ animations: 'disabled', path: 'artifacts/settings-dark.png', fullPage: true });
+  await app.emulateMedia({ colorScheme: 'light' });
+  await app.waitForFunction(() => getComputedStyle(document.documentElement).colorScheme === 'light');
+  assert.equal(await app.evaluate(() => getComputedStyle(document.body).backgroundColor), 'rgb(250, 250, 251)');
+  await app.locator('[data-view="sources"]').click();
   await app.setViewportSize({ width: 700, height: 1050 });
-  await app.screenshot({ path: 'artifacts/workspace-narrow.png', fullPage: true });
+  await app.screenshot({ animations: 'disabled', path: 'artifacts/workspace-narrow.png', fullPage: true });
   assert.equal(await app.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await app.setViewportSize({ width: 1440, height: 1100 });
   const checks = await app.evaluate(async () => {
