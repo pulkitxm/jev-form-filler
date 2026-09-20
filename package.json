@@ -1,0 +1,13 @@
+{
+  "name": "jev-form-filler",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:browser": "node scripts/verify-browser.js",
+    "check": "npm test && npm run test:browser"
+  },
+  "devDependencies": { "playwright": "^1.63.0" },
+  "engines": { "node": ">=22" }
+}

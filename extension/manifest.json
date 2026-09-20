@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Jev Form Filler",
+  "version": "0.1.0",
+  "description": "Turn your profiles and portfolio into reviewed, source-backed form answers.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": ["https://api.typesafe.ai/*"],
+  "optional_host_permissions": ["https://*/*", "http://*/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_title": "Open Jev Form Filler for this page" },
+  "options_page": "app.html",
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'" }
+}
