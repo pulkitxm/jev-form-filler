@@ -9,7 +9,7 @@
   "host_permissions": ["https://api.typesafe.ai/*"],
   "optional_host_permissions": ["https://*/*", "http://*/*"],
   "background": { "service_worker": "background.js", "type": "module" },
-  "action": { "default_title": "Open Jev Form Filler for this page" },
+  "action": { "default_title": "Fill this form with Jev", "default_popup": "popup.html" },
   "options_page": "app.html",
   "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'" }
 }
