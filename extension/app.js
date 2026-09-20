@@ -18,6 +18,7 @@ let profile = stored.profile || {};
 let hasKey = Boolean(stored.apiKey);
 let currentConnector = 'website';
 let draft = null;
+let profileDiagnostics = {};
 let controller = null;
 let scan = null;
 let suggestions = [];
@@ -117,14 +118,17 @@ function renderProfile() {
     input.maxLength = 2400;
     input.placeholder = 'Add this detail';
     const fact = values[key];
-    field.append(caption, input, create('p', 'provenance', fact?.source ? `Source: ${fact.source}` : 'Add manually or build from your sources'));
+    const decision = profileDiagnostics[key];
+    const missing = decision ? decision.choice === 'skip' ? `Jev found no clear match among ${decision.options} candidates.` : `Match withheld: ${Math.round(decision.confidence * 100)}% confidence among ${decision.options} candidates.` : 'Add manually or build from your sources';
+    field.append(caption, input, create('p', 'provenance', fact?.source ? `Source: ${fact.source}${fact.confidence < 0.65 ? ` · Review carefully: ${Math.round(fact.confidence * 100)}% model confidence` : ''}` : missing));
     $('#profile-fields').append(field);
   }
 }
 async function buildProfile(signal) {
   if (sources.some(source => !source.excluded && source.extractionVersion !== extractionVersion)) throw new Error('Your sources were imported with the older extractor. Choose Refresh sources to recover links and employment context, then rebuild your profile.');
   const { apiKey } = await chrome.storage.local.get('apiKey');
-  const next = await inferProfile(sources, { apiKey, signal, onProgress: status });
+  profileDiagnostics = {};
+  const next = await inferProfile(sources, { apiKey, signal, onProgress: status, onDecision: (field, decision) => profileDiagnostics[field] = decision });
   signal.throwIfAborted();
   draft = { ...Object.fromEntries(Object.entries(profile).filter(([, fact]) => fact.source === 'Entered by you')), ...next };
   showView('profile');

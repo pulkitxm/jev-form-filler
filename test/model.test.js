@@ -40,9 +40,9 @@ test('profile retrieval compares contextual candidates across all pages and excl
       assert.ok(options.every(([, item]) => item.value !== '@Brightwave'));
       if (question.instructions.includes('Current company')) {
         assert.equal(options.length, 2);
-        assert.ok(options.some(([, item]) => item.evidence[0].context.includes('Former employer')));
+        assert.ok(state.evidence.some(item => item.sources.some(source => source.context.includes('Former employer'))));
       }
-      const choice = options.find(([, item]) => item.current) || options[0];
+      const choice = options.find(([, item]) => state.evidence.some(evidence => evidence.value === item.value && evidence.current)) || options[0];
       answers[id] = { choice: choice[0], confidence: .99 };
     }
     return answers;
@@ -57,4 +57,23 @@ test('duplicate facts retain corroborating context from different sources', asyn
   assert.equal(candidates.length, 1);
   assert.equal(candidates[0].evidence.length, 2);
   assert.equal(candidates[0].current, true);
+});
+test('explicit structured identity survives without an unnecessary model decision', async () => {
+  const { inferProfile } = await import('../extension/model.js');
+  const profile = await inferProfile([{ url: 'https://portfolio.test/', candidates: [{ kind: 'name', value: 'Alex Morgan', structured: true }, { kind: 'twitter', value: 'https://x.com/alex_example', structured: true }] }], { decideImpl: async () => { throw new Error('Explicit identity should not require inference'); } });
+  assert.equal(profile.name.value, 'Alex Morgan');
+  assert.equal(profile.twitter.value, 'https://x.com/alex_example');
+});
+test('long profile context is split into bounded requests and low-confidence profile drafts stay reviewable', async () => {
+  const { inferProfile } = await import('../extension/model.js');
+  const candidates = Array.from({ length: 60 }, (_, index) => ({ kind: 'company', value: `Company ${index}`, context: `Employment history ${index} ` + 'context '.repeat(170) }));
+  let calls = 0;
+  const profile = await inferProfile([{ url: 'https://portfolio.test/', candidates }], { decideImpl: async (key, state, questions) => {
+    calls++;
+    assert.ok(JSON.stringify({ state, questions }).length < 25000);
+    return Object.fromEntries(Object.keys(questions).map(id => [id, { choice: 'c0', confidence: .6 }]));
+  } });
+  assert.ok(calls > 1);
+  assert.equal(profile.company.value, 'Company 0');
+  assert.equal(profile.company.confidence, .6);
 });

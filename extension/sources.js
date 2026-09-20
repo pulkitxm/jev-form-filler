@@ -1,5 +1,5 @@
 import { safeUrl } from './model.js';
-export const extractionVersion = 2;
+export const extractionVersion = 3;
 export function socialKind(value) {
   try {
     const url = safeUrl(value);
@@ -22,8 +22,8 @@ export function extractDocument(doc, url) {
     context = clean(context).slice(0, 1400);
     if (value && value.length <= 1200 && !candidates.some(item => item.kind === kind && item.value === value && item.context === context)) candidates.push({ kind, value, context, ...extra });
   };
-  const addUrl = (value, context, kind) => {
-    try { const href = safeUrl(value, url).href; add(kind || socialKind(href) || 'link', href, context); } catch {}
+  const addUrl = (value, context, kind, extra = {}) => {
+    try { const href = safeUrl(value, url).href; add(kind || socialKind(href) || 'link', href, context, extra); } catch {}
   };
   const current = text => /\b(?:current(?:ly)?|present|working (?:at|for)|work (?:at|for))\b/i.test(text) && !/\b(?:previously|formerly|used to|no longer)\b/i.test(text);
   for (const script of doc.querySelectorAll('script[type="application/ld+json"]')) {
@@ -42,7 +42,7 @@ export function extractDocument(doc, url) {
           }
           if (typeof data.address === 'string') add('location', data.address, context);
           else if (data.address?.addressLocality) add('location', [data.address.addressLocality, data.address.addressCountry].filter(value => typeof value === 'string').join(', '), context);
-          for (const link of [data.sameAs].flat()) if (typeof link === 'string') addUrl(link, context);
+          for (const link of [data.sameAs].flat()) if (typeof link === 'string') addUrl(link, context, undefined, { structured: true });
         }
         for (const value of Object.values(data)) if (typeof value === 'object') visit(value, depth + 1);
       };
