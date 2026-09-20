@@ -59,3 +59,7 @@ Synthetic screenshots are written to ignored `artifacts/`. No live TypeSafe deci
 API reference: [TypeSafe Choice](https://docs.typesafe.ai/primitives/choice).
 
 To verify key sharing against the actual Reader extension, build Reader first and run `node scripts/verify-sharing.js`. Set `READER_EXTENSION_DIR` if its unpacked extension is not in the sibling `jev-reader/dist/extension` folder. This uses an isolated browser profile and synthetic credentials.
+
+## Local form playground
+
+Run `npm run playground` and open `http://127.0.0.1:4178` in the browser where the extension is installed. Form Studio includes job applications, speaker proposals, community signups, freelancer profiles, company listings, and edge cases, with quick links in one navigation bar. Forms retain values while switching between links and provide a reset button. Test submissions validate locally without sending or storing entered data. The server listens only on the local machine. Use `PORT=4180 npm run playground` to choose another port.
