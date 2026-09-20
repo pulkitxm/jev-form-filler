@@ -36,6 +36,11 @@ try {
   await form.goto('https://forms.test/apply');
   const app = await context.newPage();
   await app.goto(`chrome-extension://${id}/app.html?view=files`);
+  const extracted = await app.evaluate(async () => {
+    const { parseHtml } = await import('./sources.js');
+    return parseHtml('<title>Alex profile</title><script type="application/ld+json">{"@type":"Person","name":"Alex Example","address":{"addressLocality":"Bengaluru","addressRegion":"Karnataka","addressCountry":"India","postalCode":"560001"},"alumniOf":{"name":"Cedar Valley University"}}</script><main><dl><dt>Degree</dt><dd>BSc Computer Science</dd><dt>Preferred working hours</dt><dd>09:00 to 17:00</dd></dl></main>', 'https://portfolio.test');
+  });
+  for (const [kind, value] of Object.entries({ city: 'Bengaluru', state: 'Karnataka', country: 'India', postalCode: '560001', alumniOf: 'Cedar Valley University', Degree: 'BSc Computer Science', 'Preferred working hours': '09:00 to 17:00' })) assert.ok(extracted.candidates.some(item => item.kind === kind && item.value === value));
   async function save(name, purpose, mimeType, preferred = false) {
     await app.locator('#file-upload').setInputFiles({ name, mimeType, buffer: Buffer.from(`PRIVATE_SYNTHETIC_FILE_BYTES ${name}`) });
     await app.locator('#file-purpose').fill(purpose);
@@ -71,6 +76,20 @@ try {
   assert.equal(await form.locator('[name=certificate]').evaluate(input => input.files.length), 0);
   assert.equal(await form.locator('[name=resume]').evaluate(input => input.files[0].name), 'manual.pdf');
   assert.equal(await form.locator('[name=city]').inputValue(), '');
+  await form.goto('https://forms.test/review');
+  const tabId = await worker.evaluate(async () => (await chrome.tabs.query({ url: 'https://forms.test/*' }))[0].id);
+  await app.goto(`chrome-extension://${id}/app.html?tab=${tabId}`);
+  await app.locator('[data-view="fill"]').click();
+  await app.locator('#scan').click();
+  await app.locator('#apply').waitFor();
+  assert.equal(await app.locator('[data-answer]:checked').count(), 4);
+  await app.locator('#apply').click();
+  await app.getByText(/4 fields filled. 0 skipped/).waitFor();
+  assert.equal(await form.locator('[name=resume]').evaluate(input => input.files[0].name), 'resume.pdf');
+  await app.locator('#undo').click();
+  await app.getByText(/Restored 4 fields/).waitFor();
+  assert.equal(await form.locator('[name=resume]').evaluate(input => input.files.length), 0);
+  await app.locator('[data-view="files"]').click();
   await app.getByRole('button', { name: 'Remove file certificate-one.txt', exact: true }).click();
   await app.getByText('File removed from this device.', { exact: true }).waitFor();
   assert.equal(await app.locator('#files-list .source-row').count(), 2);

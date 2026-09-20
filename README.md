@@ -23,16 +23,22 @@ Site access is requested for each imported origin. Source requests omit cookies.
 ## Build your profile and fill a form
 
 1. For existing imports, choose **Refresh sources** to recover social links, structured identity metadata, and employment context. Browser-check and sign-in pages are excluded. Choose **Build my profile**: unambiguous structured identity facts are extracted directly, and Jev compares contextual candidates from all sources for the remaining fields. Current company and company website are separate fields.
-2. Review the suggestions and choose **Save profile**. You can edit any detail or enter missing information yourself.
+2. Review the suggestions and choose **Save profile**. You can edit any detail or use **Add another detail** for your own field names. City, state/province, country, and postal code are included in the profile.
 3. Open a form and click the extension toolbar button. Choose **Fill Details** to detect fields, find supported answers, and fill them automatically. You can also right-click the page or a field and choose **Fill Details** without opening the popup.
 4. Watch the progress message on the page. Filling continues if you close the popup. Existing values and unknown answers stay unchanged.
 5. Inspect the completed form before submitting it yourself. **Undo fill** restores unchanged filled values while preserving subsequent edits.
 
 The popup shows the latest fill status and offers **Undo fill** when you reopen it on the same page.
 
-Jev provides Choice, Score, and Noul decisions. It does not generate free-form prose. This extension uses Choice to select exact profile facts, form options, and existing passages. Questions requiring newly written prose need a manual answer. Missing information stays unanswered. Profile suggestions with low model confidence are shown for explicit review instead of silently discarded. Form-filling decisions still use a 0.65 confidence threshold. Confidence is a model signal, not a guarantee of factual correctness.
+Jev provides Choice, Score, and Noul decisions. It does not generate free-form prose. This extension uses Choice to select profile facts, form options, and source evidence for arbitrary field labels. If a detail is embedded in prose, it selects a supporting passage and exact phrase boundaries. Compound locations retain their context when matching city, state, and country. Questions requiring newly written prose need a manual answer. Missing information stays unanswered. Profile suggestions with low model confidence are shown for explicit review instead of silently discarded. Direct form-filling decisions use a 0.65 confidence threshold; phrase extraction requires 0.8 and automatic file matching requires 0.85. Confidence is a model signal, not a guarantee of factual correctness.
 
-Standard visible text, email, URL, telephone, number, textarea, and single-select controls are supported. Passwords, hidden fields, identified financial/identity credentials, disabled fields, and read-only controls are excluded. Checkboxes, radio buttons, uploads, custom controls, embedded frames, closed shadow roots, and built-in browser pages are not supported. A scan handles up to 60 fields. Changes to a field's value, identity, or page after scanning cause that field to be skipped. Nothing submits the form automatically.
+Standard visible text, email, URL, telephone, number, textarea, single-select, and standard file-upload controls are supported. Passwords, hidden fields, identified financial/identity credentials, disabled fields, and read-only controls are excluded. Checkboxes, radio buttons, custom upload widgets and other custom controls, embedded frames, closed shadow roots, and built-in browser pages are not supported. A scan handles up to 60 fields. Changes to a field's value, identity, or page after scanning cause that field to be skipped. Nothing submits the form automatically.
+
+## Saved files
+
+Open **Manage profile → Files** and select a file. Give it any purpose, such as Resume, Cover letter, Degree certificate, Presentation slides, or a custom label. An optional description helps distinguish variants. Mark a file as the default for its purpose when keeping multiple versions. Files are stored in extension IndexedDB, with a 10 MB per-file limit and a 50 MB / 100-file library limit. Download or remove saved files from the library.
+
+**Fill Details** matches the upload label and accepted file types against the saved file metadata. File contents are never sent to TypeSafe. Ambiguous versions appear in the popup for explicit selection. Existing attachments are preserved. Undo clears an attachment only if it has not been replaced manually. Undo cannot retract a file that a website has already uploaded. Some websites upload immediately when a file is attached, even before form submission. Standard visible file inputs are supported; custom drop zones, hidden inputs, and cross-origin embedded forms still need manual handling.
 
 ## Data and privacy
 
@@ -40,7 +46,7 @@ Sources, profile values, and the API key are stored in local extension storage, 
 
 Building a profile sends source candidates directly to `https://api.typesafe.ai/v1/systemone`. Scanning a form sends the saved profile, form labels, option labels, and candidate passages to TypeSafe. These requests may incur usage charges. The extension is client-side, but Jev inference runs remotely at TypeSafe. There is no application backend or telemetry. Source pages are never uploaded to an application server.
 
-Removing a source also removes saved facts directly linked to it. Manually edited facts are treated as your own entries. **Delete local data** removes all sources, the profile, and the key. Browser-granted site permissions remain manageable through the extension's browser settings.
+Removing a source also removes saved facts directly linked to it. Manually edited facts are treated as your own entries. **Delete local data** removes all sources, the profile, saved files, and the key. Browser-granted site permissions remain manageable through the extension's browser settings.
 
 ## Development and verification
 
@@ -52,7 +58,7 @@ npx playwright install chromium
 npm run check
 ```
 
-Unit checks cover URL safety, model-output validation, uncertainty handling, authentication failures, and select values. The browser check installs an isolated copy of the real extension and exercises source imports, nested sitemaps, profile extraction and review, the TypeSafe HTTP contract, form filling, preservation of existing values, undo, changed fields, invalid keys, and responsive layout. Only external websites and the TypeSafe response are mocked with synthetic fixtures. The test copy grants fixture hosts to automate injection; the shipped extension uses toolbar click access and optional per-site permissions.
+Unit checks cover URL safety, model-output validation, uncertainty handling, authentication failures, and select values. The browser check installs an isolated copy of the real extension and exercises source imports, nested sitemaps, profile extraction and review, the TypeSafe HTTP contract, form filling, preservation of existing values, undo, changed fields, invalid keys, and responsive layout. A separate file browser check verifies source-derived city/state/degree values, stored file bytes, file-version ambiguity, attachments, undo, size limits, and deletion. Only external websites and the TypeSafe response are mocked with synthetic fixtures. The test copy grants fixture hosts to automate injection; the shipped extension uses toolbar click access and optional per-site permissions.
 
 Synthetic screenshots are written to ignored `artifacts/`. No live TypeSafe decision quality or real LinkedIn/X compatibility is claimed by these tests. Reload the extension after changing its files.
 

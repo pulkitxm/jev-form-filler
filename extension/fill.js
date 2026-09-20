@@ -41,7 +41,14 @@ export async function fillDetails({ execute, profile, sources, apiKey, progress 
   const results = await execute(applyAnswers, [scan.token, chosen]);
   for (const attachment of attachments.selected) {
     await progress('Attaching a saved file…');
-    results.push(await execute(applyFileAnswer, [scan.token, attachment.id, await filePayload(attachment.fileId)]));
+    try {
+      const result = await execute(applyFileAnswer, [scan.token, attachment.id, await filePayload(attachment.fileId)]);
+      results.push(result);
+      if (result.status !== 'Filled') throw new Error(result.status);
+    } catch (error) {
+      const field = scan.fields.find(field => field.id === attachment.id);
+      attachments.pending.push({ id: field.id, label: field.label, options: [], reason: `${error.message} Click Fill Details to retry on the current form.` });
+    }
   }
   const count = results.filter(result => result.status === 'Filled').length;
   return { token: scan.token, count, pending: attachments.pending, message: `${count} fields filled. ${scan.fields.length - count} left unchanged. Review the form before submitting.${attachments.pending.length ? ' Open the popup to choose files for remaining uploads.' : ''}` };

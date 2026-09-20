@@ -95,3 +95,21 @@ test('excluded sources do not supply new field answers and long answers respect 
   const sources = [{ excluded: true, candidates: [{ kind: 'city', value: 'Paris' }] }, { url: 'https://a.test', candidates: [{ kind: 'Degree', value: 'A very long degree description' }] }];
   assert.deepEqual(answerCandidates({ label: 'City', type: 'text', maxLength: 4 }, {}, sources), []);
 });
+test('unlisted fields extract exact source phrases with bounded choices, not generated text', async () => {
+  const { extractSourceAnswer } = await import('../extension/model.js');
+  const source = { url: 'https://portfolio.test', candidates: [{ kind: 'passage', value: 'I graduated from Cedar Valley University with a degree in computer science.' }] };
+  const answer = await extractSourceAnswer({ label: 'University attended', type: 'text' }, {}, [source], { decideImpl: async (key, state, questions) => {
+    if (questions.passage) return { passage: { choice: 'c0', confidence: .98 } };
+    if (questions.start) return { start: { choice: Object.entries(questions.start.criteria).find(([, item]) => item.word === 'Cedar')[0], confidence: .98 } };
+    return { end: { choice: Object.entries(questions.end.criteria).find(([, item]) => item === 'Cedar Valley University')[0], confidence: .98 } };
+  } });
+  assert.equal(answer.value, 'Cedar Valley University');
+  assert.equal(answer.source, source.url);
+  assert.ok(source.candidates[0].value.includes(answer.value));
+});
+test('profile field matching preserves compound keys and accepts case variations', async () => {
+  const { profileCandidates } = await import('../extension/model.js');
+  assert.equal(profileCandidates('postalCode', [{ kind: 'postalCode', value: '560001' }])[0].value, '560001');
+  assert.equal(profileCandidates('companyWebsite', [{ kind: 'companyWebsite', value: 'https://company.test/' }])[0].value, 'https://company.test/');
+  assert.equal(profileCandidates('city', [{ kind: 'City', value: 'Bengaluru' }])[0].value, 'Bengaluru');
+});

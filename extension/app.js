@@ -1,7 +1,7 @@
-import { listFiles, saveFile, deleteFile, clearFiles } from './files.js';
+import { listFiles, saveFile, deleteFile, clearFiles, matchFiles, acceptsFile, filePayload } from './files.js';
 import { profileFields, safeUrl, inferProfile, selectedCandidate, decide, answerCandidates, answerQuestion, suggestAnswers } from './model.js';
 import { parseHtml, extractionVersion, isBlockedPage, discoverPages, fetchText, importGithub, capturePage } from './sources.js';
-import { inspectForm, applyAnswers, undoAnswers } from './forms.js';
+import { inspectForm, applyAnswers, undoAnswers, applyFileAnswer } from './forms.js';
 import { createCredentialBridge } from './credentials.js';
 const $ = selector => document.querySelector(selector);
 const create = (tag, className, text) => {
@@ -132,7 +132,7 @@ async function buildProfile(signal) {
   profileDiagnostics = {};
   const next = await inferProfile(sources, { apiKey, signal, onProgress: status, onDecision: (field, decision) => profileDiagnostics[field] = decision });
   signal.throwIfAborted();
-  draft = { ...Object.fromEntries(Object.entries(profile).filter(([, fact]) => fact.source === 'Entered by you')), ...next };
+  draft = { ...next, ...Object.fromEntries(Object.entries(profile).filter(([, fact]) => fact.source === 'Entered by you')) };
   showView('profile');
   status('Profile suggestions are ready. Review the details, then save your profile.');
 }
@@ -155,10 +155,13 @@ function renderAnswers() {
     checkbox.dataset.answer = suggestion.field.id;
     checkbox.checked = Boolean(suggestion.answer) && !suggestion.field.value;
     label.append(checkbox, document.createTextNode(suggestion.field.label), create('span', 'badge', suggestion.field.value ? 'Existing value: review before replacing' : suggestion.answer ? 'Source-backed suggestion' : 'Needs your input'));
-    const input = create(suggestion.field.options.length ? 'select' : suggestion.field.type === 'textarea' ? 'textarea' : 'input');
+    const input = create(suggestion.field.type === 'file' || suggestion.field.options.length ? 'select' : suggestion.field.type === 'textarea' ? 'textarea' : 'input');
     input.setAttribute('aria-label', `Answer for ${suggestion.field.label}`);
     input.dataset.value = suggestion.field.id;
-    if (suggestion.field.options.length) {
+    if (suggestion.field.type === 'file') {
+      input.append(new Option('Choose a saved file', ''));
+      for (const file of suggestion.files || []) input.append(new Option(`${file.name} (${file.purpose})`, file.id));
+    } else if (suggestion.field.options.length) {
       input.append(new Option('Select an answer', ''));
       for (const option of suggestion.field.options) if (option.value) input.append(new Option(option.label, option.value));
     } else { input.rows = 2; input.maxLength = suggestion.field.maxLength; }
@@ -222,6 +225,7 @@ $('#clear-data').onclick = () => {
   if (!confirm('Delete all saved sources, profile details, files, and the API key from this extension?')) return;
   run(async () => {
     await clearFiles();
+    await chrome.storage.session.clear();
     await chrome.storage.local.clear();
     await credentials.remove();
     sources = []; profile = {}; draft = null; suggestions = []; scan = null; hasKey = false;
@@ -336,7 +340,7 @@ $('#import-open').onclick = () => run(async () => {
   status('Open page imported. Build your profile to review its details.');
 });
 $('#scan').onclick = () => run(async signal => {
-  if (!Object.values(profile).some(fact => fact.value) && !sources.some(source => !source.excluded)) throw new Error('Save some profile details before filling a form.');
+  if (!Object.values(profile).some(fact => fact.value) && !sources.some(source => !source.excluded) && !(await listFiles()).length) throw new Error('Save some profile details before filling a form.');
   status('Finding form fields…');
   suggestions = [];
   $('#answers').replaceChildren();
@@ -348,6 +352,13 @@ $('#scan').onclick = () => run(async signal => {
   if (!scan.fields.length) throw new Error('No supported, visible form fields found. Embedded frames and custom controls are not supported yet.');
   const { apiKey } = await chrome.storage.local.get('apiKey');
   const next = await suggestAnswers(scan.fields.filter(field => field.type !== 'file'), profile, sources, { apiKey, signal, onProgress: status });
+  const files = await listFiles();
+  const uploads = scan.fields.filter(field => field.type === 'file');
+  const matched = await matchFiles(uploads, files, { apiKey });
+  for (const field of uploads) {
+    const selected = matched.selected.find(item => item.id === field.id);
+    next.push({ field, files: files.filter(file => acceptsFile(field, file)), answer: selected ? { value: selected.fileId, source: 'Your saved files' } : null });
+  }
   signal.throwIfAborted();
   suggestions = next;
   renderAnswers();
@@ -356,7 +367,11 @@ $('#scan').onclick = () => run(async signal => {
 $('#apply').onclick = () => run(async () => {
   const chosen = [...document.querySelectorAll('[data-answer]:checked')].map(node => ({ id: node.dataset.answer, value: document.querySelector(`[data-value="${node.dataset.answer}"]`).value }));
   if (!chosen.length) throw new Error('Select at least one answer to fill.');
-  const results = await execute(applyAnswers, [scan.token, chosen]);
+  const results = await execute(applyAnswers, [scan.token, chosen.filter(answer => scan.fields.find(field => field.id === answer.id)?.type !== 'file')]);
+  for (const answer of chosen.filter(answer => scan.fields.find(field => field.id === answer.id)?.type === 'file')) {
+    try { results.push(await execute(applyFileAnswer, [scan.token, answer.id, await filePayload(answer.value)])); }
+    catch (error) { results.push({ id: answer.id, status: `Skipped: ${error.message}` }); }
+  }
   const filled = results.filter(result => result.status === 'Filled').length;
   $('#undo').hidden = !filled;
   $('#apply').hidden = true;
@@ -405,7 +420,7 @@ async function renderFiles() {
   for (const file of files) {
     const row = create('div', 'source-row');
     const text = create('div', 'source-text');
-    text.append(create('strong', '', file.purpose), create('p', '', `${file.name} · ${(file.size / 1024).toFixed(0)} KB${file.preferred ? ' · Default' : ''}`), create('p', '', file.description));
+    text.append(create('strong', '', file.purpose), create('p', '', `${file.name} · ${Math.max(1, Math.ceil(file.size / 1024))} KB${file.preferred ? ' · Default' : ''}`), create('p', '', file.description));
     const download = create('button', 'secondary', 'Download');
     download.onclick = () => {
       const url = URL.createObjectURL(file.blob);
