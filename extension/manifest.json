@@ -4,12 +4,45 @@
   "version": "0.1.0",
   "description": "Turn your profiles and portfolio into reviewed, source-backed form answers.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzExdMaL4ANcILhkEb1448m/va3zx47uF1riBaKckPb4in86K06s+DWcq7FVngVvJf3XxKG+KVDLhihgYmSg4QdaKkxGQFyznxzCMjkHVBLdahf2dU2ABtdIFbXqpw5JuNG8pk0OjwAJAJuBpRRCmQk9xGlUFAg9J0dJr+piSWoH0euU5/QPQHS7gwweFfJLAIKQ7B+qUp+yMo1/wb59TUDhBrwxQVftOp8bryt/AxefFpLnu2il1KJXRbFCj+FAiYxTwgKIqWjdnYKmaAh7NZhEsg+1mMX7/5WUAv0mpeguV6cswubBPphguQSANu1CKYdj6ApVAXakhG5MEeDw5GwIDAQAB",
-  "externally_connectable": { "ids": ["ofdidgkikbkkfnfflncfhhmejjigpoml"] },
-  "permissions": ["storage", "activeTab", "scripting"],
-  "host_permissions": ["https://api.typesafe.ai/*"],
-  "optional_host_permissions": ["https://*/*", "http://*/*"],
-  "background": { "service_worker": "background.js", "type": "module" },
-  "action": { "default_title": "Fill this form with Jev", "default_popup": "popup.html" },
+  "externally_connectable": {
+    "ids": [
+      "ofdidgkikbkkfnfflncfhhmejjigpoml"
+    ]
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://api.typesafe.ai/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Fill this form with Jev",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
   "options_page": "app.html",
-  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'" }
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'"
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
 }
