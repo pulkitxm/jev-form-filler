@@ -1,6 +1,7 @@
 import { profileFields, safeUrl, candidatesFromSources, profileQuestions, selectedCandidate, decide, answerCandidates, answerQuestion } from './model.js';
 import { parseHtml, discoverPages, fetchText, importGithub, capturePage } from './sources.js';
 import { inspectForm, applyAnswers, undoAnswers } from './forms.js';
+import { createCredentialBridge } from './credentials.js';
 const $ = selector => document.querySelector(selector);
 const create = (tag, className, text) => {
   const node = document.createElement(tag);
@@ -9,6 +10,8 @@ const create = (tag, className, text) => {
   return node;
 };
 await chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
+const credentials = createCredentialBridge({ runtime: chrome.runtime, storage: chrome.storage.local });
+await credentials.sync();
 const stored = await chrome.storage.local.get(['sources', 'profile', 'apiKey']);
 let sources = stored.sources || [];
 let profile = stored.profile || {};
@@ -218,17 +221,17 @@ $('#settings-form').onsubmit = event => {
   run(async () => {
     const value = $('#api-key').value.trim();
     if (value && (value.length > 512 || /\s/.test(value))) throw new Error('Enter an API key without spaces.');
-    if (value) await chrome.storage.local.set({ apiKey: value });
+    if (value) await credentials.save(value);
     hasKey = hasKey || Boolean(value);
     $('#api-key').value = '';
     $('#api-key').type = 'password';
     $('#show-key').textContent = 'Show';
     refreshKey();
-    status(value ? 'API key saved on this device.' : 'Existing key kept.');
+    status(value ? 'API key saved and shared with your Jev extensions.' : 'Existing key kept.');
   });
 };
 $('#remove-key').onclick = () => run(async () => {
-  await chrome.storage.local.remove('apiKey');
+  await credentials.remove();
   hasKey = false;
   $('#api-key').value = '';
   refreshKey();
@@ -238,6 +241,7 @@ $('#clear-data').onclick = () => {
   if (!confirm('Delete all saved sources, profile details, and the API key from this extension?')) return;
   run(async () => {
     await chrome.storage.local.clear();
+    await credentials.remove();
     sources = []; profile = {}; draft = null; suggestions = []; scan = null; hasKey = false;
     $('#api-key').value = '';
     $('#answers').replaceChildren(); $('#apply').hidden = true; $('#undo').hidden = true;
