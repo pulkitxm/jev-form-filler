@@ -157,7 +157,7 @@ export async function suggestAnswers(fields, profile, sources, { apiKey, signal,
   const suggestions = [];
   for (const [index, field] of fields.entries()) {
     signal?.throwIfAborted();
-    onProgress?.(`Finding answers: ${index + 1} of ${fields.length} fields…`);
+    await onProgress?.(`Finding answers: ${index + 1} of ${fields.length} fields…`);
     const candidates = answerCandidates(field, profile, sources);
     if (!candidates.length) { suggestions.push({ field, answer: null }); continue; }
     const evidence = fieldEvidence(field, profile, sources).slice(0, 20).map(item => ({ kind: item.kind, value: item.value.slice(0, 300), context: (item.context || item.evidence?.[0]?.context || '').slice(0, 200), source: item.source, saved: Boolean(item.saved) }));

@@ -1,5 +1,6 @@
-import { inspectForm, applyAnswers } from './forms.js';
-import { answerCandidates, answerQuestion, selectedCandidate, decide } from './model.js';
+import { listFiles, matchFiles, filePayload } from './files.js';
+import { inspectForm, applyAnswers, applyFileAnswer } from './forms.js';
+import { suggestAnswers } from './model.js';
 
 export function showProgress(message, loading) {
   let host = document.getElementById('jev-fill-progress');
@@ -26,26 +27,22 @@ export function showProgress(message, loading) {
 }
 
 export async function fillDetails({ execute, profile, sources, apiKey, progress }) {
-  if (!Object.values(profile).some(fact => fact.value)) throw new Error('Save your details in Manage profile first.');
-  if (!apiKey) throw new Error('Connect your TypeSafe API key in Manage profile first.');
+  const files = await listFiles();
+  if (!Object.values(profile).some(fact => fact.value) && !sources.some(source => !source.excluded) && !files.length) throw new Error('Save your details or files in Manage profile first.');
   await progress('Detecting form fields…');
   const scan = await execute(inspectForm);
   if (!scan.fields.length) throw new Error('No supported form fields found on this page.');
-  const chosen = [];
-  for (let offset = 0; offset < scan.fields.length; offset += 12) {
-    const batch = scan.fields.slice(offset, offset + 12).filter(field => !field.value.trim());
-    if (!batch.length) continue;
-    await progress(`Finding answers: ${Math.min(offset + 12, scan.fields.length)} of ${scan.fields.length} fields…`);
-    const candidates = batch.map(field => answerCandidates(field, profile, sources));
-    const questions = Object.fromEntries(batch.map((field, index) => [field.id, answerQuestion(field, candidates[index])]));
-    const answers = await decide(apiKey, { profile, purpose: 'Answer only from the profile owner’s evidence. Skip unknowns.' }, questions);
-    batch.forEach((field, index) => {
-      const answer = selectedCandidate(answers[field.id], candidates[index]);
-      if (answer) chosen.push({ id: field.id, value: answer.value });
-    });
-  }
+  if (scan.fields.some(field => field.type !== 'file' && !field.value.trim()) && !apiKey) throw new Error('Connect your TypeSafe API key in Manage profile first.');
+  const suggestions = await suggestAnswers(scan.fields.filter(field => field.type !== 'file' && !field.value.trim()), profile, sources, { apiKey, onProgress: progress });
+  const chosen = suggestions.filter(item => item.answer).map(item => ({ id: item.field.id, value: item.answer.value }));
+  await progress('Matching saved files…');
+  const attachments = await matchFiles(scan.fields.filter(field => field.type === 'file'), files, { apiKey });
   await progress('Filling your details…');
   const results = await execute(applyAnswers, [scan.token, chosen]);
+  for (const attachment of attachments.selected) {
+    await progress('Attaching a saved file…');
+    results.push(await execute(applyFileAnswer, [scan.token, attachment.id, await filePayload(attachment.fileId)]));
+  }
   const count = results.filter(result => result.status === 'Filled').length;
-  return { token: scan.token, count, message: `${count} fields filled. ${scan.fields.length - count} left unchanged. Review the form before submitting.` };
+  return { token: scan.token, count, pending: attachments.pending, message: `${count} fields filled. ${scan.fields.length - count} left unchanged. Review the form before submitting.${attachments.pending.length ? ' Open the popup to choose files for remaining uploads.' : ''}` };
 }

@@ -1,3 +1,4 @@
+import { listFiles, saveFile, deleteFile, clearFiles } from './files.js';
 import { profileFields, safeUrl, inferProfile, selectedCandidate, decide, answerCandidates, answerQuestion, suggestAnswers } from './model.js';
 import { parseHtml, extractionVersion, isBlockedPage, discoverPages, fetchText, importGithub, capturePage } from './sources.js';
 import { inspectForm, applyAnswers, undoAnswers } from './forms.js';
@@ -31,8 +32,9 @@ function status(message, error = false) {
 function showView(view) {
   document.querySelectorAll('.view').forEach(node => node.hidden = node.id !== `view-${view}`);
   document.querySelectorAll('.nav').forEach(node => node.classList.toggle('active', node.dataset.view === view));
-  $('#breadcrumb').textContent = { sources: 'Sources', profile: 'Your profile', fill: 'Fill a form', settings: 'Settings' }[view];
+  $('#breadcrumb').textContent = { sources: 'Sources', profile: 'Your profile', fill: 'Fill a form', files: 'Files', settings: 'Settings' }[view];
   if (view === 'profile') renderProfile();
+  if (view === 'files') void renderFiles();
 }
 function refreshKey() {
   $('#key-label').textContent = hasKey ? 'TypeSafe connected' : 'Connect TypeSafe';
@@ -107,7 +109,7 @@ function renderProfile() {
   const values = draft || profile;
   $('#draft-notice').hidden = !draft;
   $('#profile-fields').replaceChildren();
-  for (const [key, label] of Object.entries(profileFields)) {
+  for (const [key, label] of Object.entries({ ...profileFields, ...Object.fromEntries(Object.entries(values).filter(([key]) => !profileFields[key]).map(([key, fact]) => [key, fact.label || key])) })) {
     const field = create('div', `profile-field ${['bio', 'skills'].includes(key) ? 'wide' : ''}`);
     const caption = create('label', '', label);
     caption.htmlFor = `profile-${key}`;
@@ -178,7 +180,7 @@ $('#profile-form').onsubmit = event => {
     const next = {};
     for (const [key, value] of new FormData(event.target)) {
       const old = (draft || profile)[key];
-      if (value.trim()) next[key] = { value: value.trim(), source: old?.value === value.trim() ? old.source : 'Entered by you' };
+      if (value.trim()) next[key] = { value: value.trim(), label: old?.label || profileFields[key] || key, source: old?.value === value.trim() ? old.source : 'Entered by you' };
     }
     await chrome.storage.local.set({ profile: next });
     profile = next;
@@ -217,8 +219,9 @@ $('#remove-key').onclick = () => run(async () => {
   status('API key removed.');
 });
 $('#clear-data').onclick = () => {
-  if (!confirm('Delete all saved sources, profile details, and the API key from this extension?')) return;
+  if (!confirm('Delete all saved sources, profile details, files, and the API key from this extension?')) return;
   run(async () => {
+    await clearFiles();
     await chrome.storage.local.clear();
     await credentials.remove();
     sources = []; profile = {}; draft = null; suggestions = []; scan = null; hasKey = false;
@@ -333,7 +336,7 @@ $('#import-open').onclick = () => run(async () => {
   status('Open page imported. Build your profile to review its details.');
 });
 $('#scan').onclick = () => run(async signal => {
-  if (!Object.values(profile).some(fact => fact.value)) throw new Error('Save some profile details before filling a form.');
+  if (!Object.values(profile).some(fact => fact.value) && !sources.some(source => !source.excluded)) throw new Error('Save some profile details before filling a form.');
   status('Finding form fields…');
   suggestions = [];
   $('#answers').replaceChildren();
@@ -383,3 +386,48 @@ if (targetId) {
     $('#target-url').textContent = tab.url || 'Click Scan form to read this page.';
   } catch { $('#target-url').textContent = 'The original tab is closed. Open a page and click the toolbar button again.'; }
 }
+
+$('#add-detail').onclick = () => {
+  const label = prompt('Name of the detail, for example Degree, Languages, or Availability');
+  if (!label?.trim()) return;
+  const values = { ...(draft || profile) };
+  for (const [key, value] of new FormData($('#profile-form'))) values[key] = { ...values[key], value: value.trim(), source: values[key]?.value === value.trim() ? values[key]?.source : 'Entered by you' };
+  const key = `detail-${crypto.randomUUID()}`;
+  values[key] = { label: label.trim().slice(0, 120), value: '', source: 'Entered by you' };
+  draft = values;
+  renderProfile();
+  document.getElementById(`profile-${key}`).focus();
+};
+async function renderFiles() {
+  const files = await listFiles();
+  $('#files-list').replaceChildren();
+  if (!files.length) $('#files-list').append(create('p', 'empty', 'No files saved yet. Add one above to use it in forms.'));
+  for (const file of files) {
+    const row = create('div', 'source-row');
+    const text = create('div', 'source-text');
+    text.append(create('strong', '', file.purpose), create('p', '', `${file.name} · ${(file.size / 1024).toFixed(0)} KB${file.preferred ? ' · Default' : ''}`), create('p', '', file.description));
+    const download = create('button', 'secondary', 'Download');
+    download.onclick = () => {
+      const url = URL.createObjectURL(file.blob);
+      const link = create('a'); link.href = url; link.download = file.name; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    };
+    const remove = create('button', 'secondary', 'Remove');
+    remove.setAttribute('aria-label', `Remove file ${file.name}`);
+    remove.onclick = () => run(async () => { await deleteFile(file.id); await renderFiles(); status('File removed from this device.'); });
+    row.append(text, download, remove);
+    $('#files-list').append(row);
+  }
+}
+$('#file-form').onsubmit = event => {
+  event.preventDefault();
+  const file = $('#file-upload').files[0];
+  if (!file) return;
+  run(async () => {
+    await saveFile(file, { purpose: $('#file-purpose').value, description: $('#file-description').value, preferred: $('#file-preferred').checked });
+    $('#file-form').reset();
+    await renderFiles();
+    status('File saved on this device. Fill Details can now match it to upload fields.');
+  });
+};
+if (new URL(location.href).searchParams.get('view') === 'files') showView('files');

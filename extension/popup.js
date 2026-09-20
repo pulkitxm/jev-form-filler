@@ -10,6 +10,38 @@ function render(state) {
   $('#fill').textContent = state?.loading ? 'Filling…' : 'Fill Details';
   $('#status').setAttribute('aria-busy', String(Boolean(state?.loading)));
   $('#undo').hidden = !state?.count || state.loading;
+  $('#file-choices').replaceChildren();
+  for (const field of state?.pending || []) {
+    const card = document.createElement('div');
+    card.className = 'answer';
+    const label = document.createElement('label');
+    label.textContent = field.label;
+    const select = document.createElement('select');
+    select.className = 'value';
+    select.setAttribute('aria-label', `File for ${field.label}`);
+    select.add(new Option('Choose a saved file', ''));
+    for (const file of field.options) select.add(new Option(`${file.name} (${file.purpose})`, file.id));
+    const button = document.createElement('button');
+    button.textContent = 'Attach file';
+    button.disabled = true;
+    select.onchange = () => { button.disabled = !select.value; };
+    button.onclick = async () => {
+      button.disabled = true;
+      try {
+        const result = await chrome.runtime.sendMessage({ type: 'ATTACH_FILE', tabId, fieldId: field.id, fileId: select.value });
+        if (result?.error) throw new Error(result.error);
+      } catch (error) { $('#status').textContent = error.message; button.disabled = false; }
+    };
+    const hint = document.createElement('small');
+    hint.textContent = field.reason;
+    const manage = document.createElement('button');
+    manage.className = 'secondary';
+    manage.textContent = 'Manage files';
+    manage.onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL(`app.html?view=files&tab=${tabId}`) });
+    label.append(select);
+    card.append(label, hint, button, manage);
+    $('#file-choices').append(card);
+  }
 }
 $('#manage').onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL(`app.html${tabId ? `?tab=${tabId}` : ''}`) });
 $('#fill').onclick = async () => {

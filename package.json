@@ -6,8 +6,9 @@
   "scripts": {
     "test": "node --test test/*.test.js",
     "test:browser": "node scripts/verify-browser.js",
-    "check": "npm test && npm run test:browser",
-    "playground": "node scripts/serve-playground.js"
+    "check": "npm test && npm run test:browser && npm run test:files",
+    "playground": "node scripts/serve-playground.js",
+    "test:files": "node scripts/verify-files.js"
   },
   "devDependencies": {
     "playwright": "^1.63.0"

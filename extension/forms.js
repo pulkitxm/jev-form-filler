@@ -5,13 +5,13 @@ export function inspectForm() {
   const token = crypto.randomUUID();
   for (const node of document.querySelectorAll('input,textarea,select')) {
     const type = node.tagName === 'TEXTAREA' ? 'textarea' : node.tagName === 'SELECT' ? 'select' : node.type;
-    if (!['text', 'email', 'tel', 'url', 'textarea', 'select', 'number'].includes(type) || node.disabled || node.readOnly || node.multiple || !visible(node) || node.closest('[inert]')) continue;
+    if (!['text', 'email', 'tel', 'url', 'textarea', 'select', 'number', 'file'].includes(type) || node.disabled || node.readOnly || type === 'select' && node.multiple || !visible(node) || node.closest('[inert]')) continue;
     const labelled = (node.getAttribute('aria-labelledby') || '').split(/\s+/).map(id => document.getElementById(id)?.textContent || '').join(' ').trim();
     const label = ([...node.labels || []].map(label => { const copy = label.cloneNode(true); copy.querySelectorAll('input,textarea,select,button').forEach(child => child.remove()); return copy.textContent; }).join(' ') || labelled || node.getAttribute('aria-label') || node.placeholder || node.name || node.id).replace(/\s+/g, ' ').trim().slice(0, 240);
     if (!label || /password|credit.?card|card.?number|cvv|social.?security|\bssn\b|passport|bank.?account|routing.?number|one.?time|verification.?code/i.test(`${label} ${node.autocomplete}`)) continue;
     const id = `field${fields.length}`;
     const options = type === 'select' ? [...node.options].filter(option => !option.disabled && !option.closest('optgroup[disabled]')).map(option => ({ value: option.value, label: option.textContent.trim() })).slice(0, 180) : [];
-    fields.push({ id, label, type, value: node.value, maxLength: node.maxLength > 0 ? node.maxLength : 12000, options });
+    fields.push({ id, label, type, name: node.name, autocomplete: node.autocomplete, accept: node.accept || '', multiple: Boolean(node.multiple), context: (node.closest('fieldset')?.querySelector('legend')?.textContent || '') + ' ' + (node.getAttribute('aria-describedby') || '').split(/\s+/).map(id => document.getElementById(id)?.textContent || '').join(' ').slice(0, 500), value: node.value, maxLength: node.maxLength > 0 ? node.maxLength : 12000, options });
     elements.set(id, { node, original: node.value, type, label, identity: JSON.stringify([node.name, node.id, node.getAttribute('type'), node.autocomplete]) });
     if (fields.length === 60) break;
   }
@@ -46,7 +46,17 @@ export function undoAnswers(token) {
   const session = globalThis.__jevFormSession;
   if (!session || session.token !== token || session.url !== location.href) throw new Error('The page changed. Undo is no longer available.');
   let restored = 0;
-  for (const { node, before, after } of session.undo.reverse()) {
+  for (const { node, before, after, files } of session.undo.reverse()) {
+    if (files) {
+      if (!node.isConnected || node.files.length !== after.length || !after.every((file, index) => node.files[index] === file)) continue;
+      const transfer = new DataTransfer();
+      before.forEach(file => transfer.items.add(file));
+      node.files = transfer.files;
+      node.dispatchEvent(new Event('input', { bubbles: true }));
+      node.dispatchEvent(new Event('change', { bubbles: true }));
+      restored++;
+      continue;
+    }
     if (!node.isConnected || node.value !== after) continue;
     const prototype = node.tagName === 'SELECT' ? HTMLSelectElement.prototype : node.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     Object.getOwnPropertyDescriptor(prototype, 'value').set.call(node, before);
@@ -56,4 +66,25 @@ export function undoAnswers(token) {
   }
   session.undo = [];
   return restored;
+}
+
+export function applyFileAnswer(token, id, file) {
+  const session = globalThis.__jevFormSession;
+  if (!session || session.token !== token || session.url !== location.href) throw new Error('The page changed. Click Fill Details again.');
+  const entry = session.elements.get(id);
+  const node = entry?.node;
+  if (!node?.isConnected || node.type !== 'file' || node.disabled || node.files.length || !node.getClientRects().length || getComputedStyle(node).visibility === 'hidden' || node.closest('[inert]')) return { id, status: 'Skipped: upload field changed or already has a file' };
+  const label = ([...node.labels || []].map(label => { const copy = label.cloneNode(true); copy.querySelectorAll('input,textarea,select,button').forEach(child => child.remove()); return copy.textContent; }).join(' ') || (node.getAttribute('aria-labelledby') || '').split(/\s+/).map(id => document.getElementById(id)?.textContent || '').join(' ').trim() || node.getAttribute('aria-label') || node.placeholder || node.name || node.id).replace(/\s+/g, ' ').trim().slice(0, 240);
+  if (entry.label !== label || JSON.stringify([node.name, node.id, node.getAttribute('type'), node.autocomplete]) !== entry.identity) return { id, status: 'Skipped: upload field identity changed' };
+  const types = { pdf: 'application/pdf', txt: 'text/plain', csv: 'text/csv', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', zip: 'application/zip' };
+  const mime = (file.type || types[file.name.split('.').pop().toLowerCase()] || '').toLowerCase();
+  if (node.accept && !node.accept.toLowerCase().split(',').some(value => { const rule = value.trim(); return rule.startsWith('.') ? file.name.toLowerCase().endsWith(rule) : rule.endsWith('/*') ? mime.startsWith(rule.slice(0, -1)) : mime === rule; })) return { id, status: 'Skipped: file type is not accepted' };
+  const bytes = Uint8Array.from(atob(file.base64), character => character.charCodeAt(0));
+  const transfer = new DataTransfer();
+  transfer.items.add(new File([bytes], file.name, { type: mime, lastModified: file.lastModified }));
+  node.files = transfer.files;
+  session.undo.push({ node, before: [], after: [...node.files], files: true });
+  node.dispatchEvent(new Event('input', { bubbles: true }));
+  node.dispatchEvent(new Event('change', { bubbles: true }));
+  return { id, status: 'Filled' };
 }

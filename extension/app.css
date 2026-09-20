@@ -27,3 +27,5 @@ dialog::backdrop{background:#08060bb3}.error-text{color:#f0a1b0!important}
 }
 
 .source-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+#file-form label{display:block;margin:16px 0 6px}#file-form input:not([type=checkbox]),#file-form textarea{display:block;width:100%;padding:12px;border:1px solid var(--line,#dedbe9);border-radius:8px;background:transparent;color:inherit;font:inherit}#file-form .check-row{display:flex;gap:10px;align-items:center}#file-form textarea{min-height:80px}#add-detail{margin-top:20px}
