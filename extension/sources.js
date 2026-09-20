@@ -1,38 +1,98 @@
 import { safeUrl } from './model.js';
+export const extractionVersion = 2;
+export function socialKind(value) {
+  try {
+    const url = safeUrl(value);
+    const host = url.hostname.replace(/^www\./, '');
+    const path = url.pathname.split('/').filter(Boolean);
+    if (host === 'linkedin.com' && path[0] === 'in' && path[1]) return 'linkedin';
+    if (['x.com', 'twitter.com'].includes(host) && path.length === 1 && !['home', 'intent', 'share', 'search', 'explore', 'i'].includes(path[0])) return 'twitter';
+    if (host === 'github.com' && path.length === 1 && !['login', 'signup', 'explore', 'features', 'settings'].includes(path[0])) return 'github';
+  } catch {}
+  return null;
+}
+export const isBlockedPage = title => /checking your browser|just a moment|security verification|access denied|verify (?:you are|you're) human|recaptcha|sign in to linkedin/i.test(title);
 export function extractDocument(doc, url) {
+  const title = doc.querySelector('title')?.textContent || '';
+  if (isBlockedPage(title)) throw new Error('This is a sign-in or browser-check page, not profile content. Open the actual profile and import the loaded page.');
   const candidates = [];
-  const add = (kind, value) => {
-    value = String(value || '').replace(/\s+/g, ' ').trim();
-    if (value && value.length <= 1200 && !candidates.some(item => item.kind === kind && item.value === value)) candidates.push({ kind, value });
+  const clean = value => String(value || '').replace(/\s+/g, ' ').trim();
+  const add = (kind, value, context = '', extra = {}) => {
+    value = clean(value);
+    context = clean(context).slice(0, 1400);
+    if (value && value.length <= 1200 && !candidates.some(item => item.kind === kind && item.value === value && item.context === context)) candidates.push({ kind, value, context, ...extra });
   };
+  const addUrl = (value, context, kind) => {
+    try { const href = safeUrl(value, url).href; add(kind || socialKind(href) || 'link', href, context); } catch {}
+  };
+  const current = text => /\b(?:current(?:ly)?|present|working (?:at|for)|work (?:at|for))\b/i.test(text) && !/\b(?:previously|formerly|used to|no longer)\b/i.test(text);
   for (const script of doc.querySelectorAll('script[type="application/ld+json"]')) {
     try {
       const visit = (data, depth = 0) => {
         if (!data || typeof data !== 'object' || depth > 8) return;
         if ([data['@type']].flat().includes('Person')) {
-          for (const [key, kind] of Object.entries({ name: 'name', email: 'email', telephone: 'phone', jobTitle: 'role', url: 'website', description: 'bio' })) if (typeof data[key] === 'string') add(kind, data[key]);
-          if (typeof data.worksFor?.name === 'string') add('company', data.worksFor.name);
-          if (typeof data.address?.addressLocality === 'string') add('location', data.address.addressLocality);
+          const context = `Structured Person: ${clean(data.name)}. ${clean(data.description)}.`;
+          for (const [key, kind] of Object.entries({ name: 'name', email: 'email', telephone: 'phone', jobTitle: 'role', url: 'website', description: 'bio' })) if (typeof data[key] === 'string') add(kind, data[key], context, { structured: true });
+          for (const organization of [data.worksFor].flat()) {
+            if (typeof organization === 'string') add('company', organization, context, { current: true });
+            else if (organization?.name) {
+              add('company', organization.name, context, { current: true });
+              if (organization.url) addUrl(organization.url, `Current employer: ${organization.name}`, 'companyWebsite');
+            }
+          }
+          if (typeof data.address === 'string') add('location', data.address, context);
+          else if (data.address?.addressLocality) add('location', [data.address.addressLocality, data.address.addressCountry].filter(value => typeof value === 'string').join(', '), context);
+          for (const link of [data.sameAs].flat()) if (typeof link === 'string') addUrl(link, context);
         }
         for (const value of Object.values(data)) if (typeof value === 'object') visit(value, depth + 1);
       };
       visit(JSON.parse(script.textContent));
     } catch {}
   }
-  add('name candidate', doc.querySelector('h1')?.textContent);
-  add('title', doc.querySelector('title')?.textContent);
-  add('bio', doc.querySelector('meta[name="description"],meta[property="og:description"]')?.content);
-  for (const link of doc.querySelectorAll('a[href^="mailto:"]')) add('email', link.getAttribute('href').slice(7).split('?')[0]);
-  for (const link of doc.querySelectorAll('a[href^="tel:"]')) add('phone', link.getAttribute('href').slice(4));
-  const host = new URL(url).hostname;
-  add((host === 'linkedin.com' || host.endsWith('.linkedin.com')) ? 'linkedin' : ['x.com', 'twitter.com', 'www.x.com', 'www.twitter.com'].includes(host) ? 'twitter' : host === 'github.com' ? 'github' : 'website', url);
-  for (const node of doc.querySelectorAll('script,style,noscript,nav,footer,form,button,input,textarea,select,[hidden],[aria-hidden="true"]')) node.remove();
-  const root = doc.querySelector('main,article,[role="main"]') || doc.body;
-  for (const node of root?.querySelectorAll('h1,h2,h3,p,li,dt,dd,[data-testid="UserDescription"]') || []) add('passage', node.textContent);
-  if (candidates.filter(item => item.kind === 'passage').length < 2) {
-    for (const line of (root?.textContent || '').split(/\n+/)) add('passage', line);
+  add('name candidate', doc.querySelector('h1')?.textContent, `Page heading on ${title}`);
+  add('title', title);
+  add('bio', doc.querySelector('meta[name="description"],meta[property="og:description"]')?.content, title);
+  for (const link of doc.querySelectorAll('a[href]')) {
+    if (link.closest('form,[hidden],[aria-hidden="true"]')) continue;
+    const href = link.getAttribute('href');
+    const text = clean(link.textContent);
+    const context = clean(link.closest('p,li,article,section')?.textContent || link.parentElement?.textContent).slice(0, 1400);
+    if (href.startsWith('mailto:')) { add('email', href.slice(7).split('?')[0], context); continue; }
+    if (href.startsWith('tel:')) { add('phone', href.slice(4), context); continue; }
+    let target;
+    try { target = safeUrl(href, url); } catch { continue; }
+    const social = socialKind(target.href);
+    if (social) add(social, target.href, `${text}. ${context}`);
+    else if (!/\.(?:png|webp|jpe?g|gif|svg|pdf|zip)(?:$|\?)/i.test(target.pathname)) {
+      add('link', target.href, `${text}. ${context}`);
+      if (text && text.length < 150 && /\b(?:work|working|engineer|developer|founder|company|employer|venture|joined)\b/i.test(context)) {
+        add('company', text, context, { current: current(context) });
+        if (target.origin !== new URL(url).origin) add('companyWebsite', target.href, `${text}. ${context}`, { current: current(context) });
+      }
+    }
   }
-  return { url, title: candidates.find(item => item.kind === 'title')?.value || host, candidates: candidates.slice(0, 160), importedAt: new Date().toISOString() };
+  const host = new URL(url).hostname;
+  add(socialKind(url) || 'website', url, `Imported page: ${title}`);
+  for (const node of doc.querySelectorAll('script,style,noscript,nav,footer,aside,form,button,input,textarea,select,[hidden],[aria-hidden="true"]')) node.remove();
+  const root = doc.querySelector('main,article,[role="main"]') || doc.body;
+  const blocks = [...root?.querySelectorAll('h1,h2,h3,p,li,dt,dd,[data-title],[data-testid="UserDescription"],div,span') || []];
+  for (const node of blocks) {
+    if (['DIV', 'SPAN'].includes(node.tagName) && node.children.length && !node.hasAttribute('data-title')) continue;
+    const text = clean(node.textContent);
+    if (!text) continue;
+    const context = clean(node.closest('a,li,article,section')?.textContent || node.parentElement?.textContent).slice(0, 1400);
+    const chunks = text.match(/[^.!?]+(?:[.!?](?=\s|$)|$)/g) || [text];
+    for (const chunk of text.length > 1200 ? chunks : [text]) add('passage', chunk, context);
+    if (node.hasAttribute('data-title')) add('company', text, context, { current: current(context) });
+    const role = text.match(/^(?:senior |junior |staff |lead |founding |principal )?(?:software |full[ -]stack |frontend |backend |product )?(?:engineer|developer|designer|founder|manager)(?:\b|$)/i);
+    if (role) add('role', role[0], context, { current: current(context) });
+    for (const match of text.matchAll(/\b(?:working|work)\s+(?:at|for)\s+([\p{L}\p{N}][\p{L}\p{N}.& -]{1,70}?)(?=\s*[,;!]|\.\s|\s+(?:as|where|and|since)\b|$)/gu)) add('company', match[1].replace(/\.$/, ''), text, { current: current(text) });
+    for (const match of text.matchAll(/\bbased in ([\p{L}][\p{L} ,]{1,70}?)(?=,?\s+(?:working|building|and)|[.!]|$)/gu)) add('location', match[1].replace(/,$/, ''), text);
+    for (const match of text.matchAll(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi)) add('email', match[0], text);
+  }
+  const passages = candidates.filter(item => item.kind === 'passage');
+  const facts = candidates.filter(item => item.kind !== 'passage');
+  return { url, title: title || host, candidates: [...facts.slice(0, 200), ...passages.slice(0, 300)], importedAt: new Date().toISOString(), extractionVersion };
 }
 export function parseHtml(html, url) {
   return extractDocument(new DOMParser().parseFromString(html, 'text/html'), url);
@@ -111,7 +171,7 @@ export async function importGithub(value, options = {}) {
     }
     if (languages.size) candidates.push({ kind: 'skills', value: [...languages].join(', ') });
   } catch (error) { if (options.signal?.aborted) throw error; warning = 'Profile imported, but public repositories could not be read.'; }
-  return { url: user.html_url, title: user.name || username, candidates, warning, importedAt: new Date().toISOString() };
+  return { url: user.html_url, title: user.name || username, candidates, warning, extractionVersion, importedAt: new Date().toISOString() };
 }
 export function capturePage() {
   const root = document.querySelector('main,[role="main"],article') || document.body;

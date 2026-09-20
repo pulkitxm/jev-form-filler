@@ -35,9 +35,10 @@ try {
     const answers = {};
     for (const [key, question] of Object.entries(body.questions)) {
       let choice = 'skip';
-      if (body.state.evidence) {
-        const index = body.state.evidence.findIndex(item => item.kind === key || item.field === key);
-        if (index >= 0) choice = `c${index}`;
+      if (typeof question.instructions === 'string') {
+        const field = question.instructions.match(/^Select the exact (.*?) of the profile owner/)[1];
+        const kind = { 'Full name': 'name', 'Email address': 'email', 'Phone number': 'phone', Location: 'location', 'Job title': 'role', 'Current company': 'company', 'Company website URL': 'companyWebsite', 'Portfolio URL': 'website', 'LinkedIn URL': 'linkedin', 'X / Twitter URL': 'twitter', 'GitHub URL': 'github', 'About you': 'bio', Skills: 'skills' }[field];
+        choice = Object.entries(question.criteria).find(([, candidate]) => candidate.kind === kind)?.[0] || 'skip';
       } else {
         const label = question.instructions.field.toLowerCase();
         const desired = label.includes('name') ? 'Alex Morgan' : label.includes('email') ? 'alex@example.test' : label.includes('location') ? 'London' : label.includes('about') ? 'I build accessible web products and open-source developer tools.' : label.includes('company') ? 'Northstar Studio' : null;
@@ -150,6 +151,28 @@ try {
   assert.equal(JSON.stringify(checks.candidates).includes('PRIVATE FORM CONTENT'), false);
   assert.equal(checks.injected, false);
   assert.deepEqual(checks.sitemap.urls, ['https://portfolio.test/about']);
+  const retrievalHtml = await readFile('fixtures/portfolio-retrieval.html', 'utf8');
+  const extracted = await app.evaluate(async html => {
+    const { parseHtml } = await import('./sources.js');
+    return parseHtml(html, 'https://portfolio.test/');
+  }, retrievalHtml);
+  const values = kind => extracted.candidates.filter(item => item.kind === kind).map(item => item.value);
+  assert.ok(values('name').includes('Alex Morgan'));
+  assert.ok(values('twitter').includes('https://x.com/alex_example'));
+  assert.ok(values('linkedin').includes('https://www.linkedin.com/in/alex-example/'));
+  assert.ok(values('email').includes('alex@example.test'));
+  assert.ok(values('company').includes('Brightwave.ai'));
+  assert.ok(values('companyWebsite').includes('https://brightwave.test/'));
+  assert.ok(extracted.candidates.some(item => item.kind === 'company' && item.value === 'Brightwave.ai' && item.current));
+  assert.equal(extracted.candidates.some(item => item.kind === 'company' && item.value === 'Old Studio' && item.current), false);
+  assert.ok(extracted.candidates.some(item => item.kind === 'role' && item.value === 'Software Engineer' && item.current));
+  assert.equal(await app.evaluate(async () => {
+    const { parseHtml } = await import('./sources.js');
+    try { parseHtml('<title>Checking your browser - reCAPTCHA</title><h1>Please wait</h1>', 'https://profile.test/'); return false; } catch { return true; }
+  }), true);
+  await app.locator('#refresh-sources').click();
+  await app.getByText('3 sources refreshed. Build your profile to use the recovered context.', { exact: true }).waitFor();
+
   await form.goto('https://portfolio.test/');
   await app.locator('#import-open').click();
   await app.getByText('Open page imported. Build your profile to review its details.', { exact: true }).waitFor();

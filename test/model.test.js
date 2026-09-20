@@ -26,3 +26,35 @@ test('abort signals stop TypeSafe work without a fallback answer', async () => {
   controller.abort();
   await assert.rejects(decide('test', {}, {}, { signal: controller.signal, fetchImpl: async (url, options) => { options.signal.throwIfAborted(); } }), /Stopped/);
 });
+test('profile retrieval compares contextual candidates across all pages and excludes company handles', async () => {
+  const { inferProfile } = await import('../extension/model.js');
+  const sources = [
+    { url: 'https://github.com/alex-example', candidates: [{ kind: 'company', value: '@Brightwave' }] },
+    { url: 'https://portfolio.test/past', candidates: [{ kind: 'company', value: 'Old Studio', context: 'Former employer, 2023 to 2024.' }] },
+    { url: 'https://portfolio.test/', candidates: [{ kind: 'name', value: 'Alex Morgan', structured: true }, { kind: 'company', value: 'Brightwave.ai', context: 'I work at Brightwave.ai.', current: true }, { kind: 'twitter', value: 'https://x.com/alex_example' }] }
+  ];
+  const profile = await inferProfile(sources, { apiKey: 'synthetic', decideImpl: async (key, state, questions) => {
+    const answers = {};
+    for (const [id, question] of Object.entries(questions)) {
+      const options = Object.entries(question.criteria).filter(([key]) => key !== 'skip');
+      assert.ok(options.every(([, item]) => item.value !== '@Brightwave'));
+      if (question.instructions.includes('Current company')) {
+        assert.equal(options.length, 2);
+        assert.ok(options.some(([, item]) => item.evidence[0].context.includes('Former employer')));
+      }
+      const choice = options.find(([, item]) => item.current) || options[0];
+      answers[id] = { choice: choice[0], confidence: .99 };
+    }
+    return answers;
+  } });
+  assert.equal(profile.company.value, 'Brightwave.ai');
+  assert.equal(profile.name.value, 'Alex Morgan');
+  assert.equal(profile.twitter.value, 'https://x.com/alex_example');
+});
+test('duplicate facts retain corroborating context from different sources', async () => {
+  const { candidatesFromSources } = await import('../extension/model.js');
+  const candidates = candidatesFromSources([{ url: 'https://a.test', candidates: [{ kind: 'company', value: 'Brightwave.ai', context: 'Employer' }] }, { url: 'https://b.test', candidates: [{ kind: 'company', value: 'Brightwave.ai', context: 'Current employer', current: true }] }]);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].evidence.length, 2);
+  assert.equal(candidates[0].current, true);
+});

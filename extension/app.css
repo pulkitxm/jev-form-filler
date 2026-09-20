@@ -25,3 +25,5 @@ button:focus-visible,a:focus-visible{outline-color:#c5a8ed}
 .status-bar{background:#3a2f49;color:#f1eafa}.status-bar.error{background:#653647}
 dialog::backdrop{background:#08060bb3}.error-text{color:#f0a1b0!important}
 }
+
+.source-actions{display:flex;gap:8px;flex-wrap:wrap}
