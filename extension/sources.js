@@ -1,5 +1,5 @@
 import { safeUrl } from './model.js';
-export const extractionVersion = 3;
+export const extractionVersion = 4;
 export function socialKind(value) {
   try {
     const url = safeUrl(value);
@@ -41,13 +41,31 @@ export function extractDocument(doc, url) {
             }
           }
           if (typeof data.address === 'string') add('location', data.address, context);
-          else if (data.address?.addressLocality) add('location', [data.address.addressLocality, data.address.addressCountry].filter(value => typeof value === 'string').join(', '), context);
+          else if (data.address && typeof data.address === 'object') {
+            for (const [key, kind] of Object.entries({ addressLocality: 'city', addressRegion: 'state', addressCountry: 'country', postalCode: 'postalCode', streetAddress: 'address' })) {
+              const value = typeof data.address[key] === 'string' ? data.address[key] : data.address[key]?.name;
+              if (value) add(kind, value, context, { structured: true });
+            }
+            add('location', [data.address.addressLocality, data.address.addressRegion, typeof data.address.addressCountry === 'string' ? data.address.addressCountry : data.address.addressCountry?.name].filter(Boolean).join(', '), context);
+          }
+          for (const [key, value] of Object.entries(data)) {
+            if (typeof value === 'string' && !key.startsWith('@') && !['name', 'description', 'email', 'telephone', 'url', 'jobTitle'].includes(key)) add(key, value, context, { structured: true });
+            if (['alumniOf', 'knowsLanguage', 'hasCredential', 'award', 'knowsAbout'].includes(key)) for (const entry of [value].flat()) if (typeof entry === 'string' || entry?.name) add(key, typeof entry === 'string' ? entry : entry.name, context, { structured: true });
+          }
           for (const link of [data.sameAs].flat()) if (typeof link === 'string') addUrl(link, context, undefined, { structured: true });
         }
         for (const value of Object.values(data)) if (typeof value === 'object') visit(value, depth + 1);
       };
       visit(JSON.parse(script.textContent));
     } catch {}
+  }
+  for (const term of doc.querySelectorAll('dt')) {
+    const value = term.nextElementSibling;
+    if (value?.tagName === 'DD' && !term.closest('form')) add(clean(term.textContent), value.textContent, term.parentElement?.textContent);
+  }
+  for (const row of doc.querySelectorAll('tr')) {
+    const cells = row.querySelectorAll('th,td');
+    if (cells.length === 2 && !row.closest('form')) add(clean(cells[0].textContent), cells[1].textContent, row.textContent);
   }
   add('name candidate', doc.querySelector('h1')?.textContent, `Page heading on ${title}`);
   add('title', title);

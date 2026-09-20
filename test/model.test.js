@@ -77,3 +77,21 @@ test('long profile context is split into bounded requests and low-confidence pro
   assert.equal(profile.company.value, 'Company 0');
   assert.equal(profile.company.confidence, .6);
 });
+test('arbitrary form fields retrieve source facts and location components without a saved key', async () => {
+  const { suggestAnswers } = await import('../extension/model.js');
+  const source = { url: 'https://portfolio.test', candidates: [
+    { kind: 'location', value: 'Bengaluru, Karnataka, India', context: 'Home location of Alex Morgan' },
+    { kind: 'Degree', value: 'BSc Computer Science', context: 'Alex graduated with this degree.' }
+  ] };
+  const fields = [{ id: 'city', label: 'City', type: 'text' }, { id: 'state', label: 'State', type: 'text' }, { id: 'degree', label: 'Degree', type: 'text' }];
+  const desired = { city: 'Bengaluru', state: 'Karnataka', degree: 'BSc Computer Science' };
+  const results = await suggestAnswers(fields, {}, [source], { decideImpl: async (key, state, questions) => {
+    assert.ok(state.evidence.some(item => item.context.includes('Home location')));
+    return Object.fromEntries(Object.entries(questions).map(([id, question]) => [id, { choice: Object.entries(question.criteria).find(([, choice]) => choice.value === desired[id])[0], confidence: .98 }]));
+  } });
+  assert.deepEqual(results.map(item => item.answer.value), Object.values(desired));
+});
+test('excluded sources do not supply new field answers and long answers respect maximum length', () => {
+  const sources = [{ excluded: true, candidates: [{ kind: 'city', value: 'Paris' }] }, { url: 'https://a.test', candidates: [{ kind: 'Degree', value: 'A very long degree description' }] }];
+  assert.deepEqual(answerCandidates({ label: 'City', type: 'text', maxLength: 4 }, {}, sources), []);
+});

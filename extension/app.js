@@ -1,4 +1,4 @@
-import { profileFields, safeUrl, inferProfile, selectedCandidate, decide, answerCandidates, answerQuestion } from './model.js';
+import { profileFields, safeUrl, inferProfile, selectedCandidate, decide, answerCandidates, answerQuestion, suggestAnswers } from './model.js';
 import { parseHtml, extractionVersion, isBlockedPage, discoverPages, fetchText, importGithub, capturePage } from './sources.js';
 import { inspectForm, applyAnswers, undoAnswers } from './forms.js';
 import { createCredentialBridge } from './credentials.js';
@@ -344,16 +344,7 @@ $('#scan').onclick = () => run(async signal => {
   $('#target-url').textContent = scan.url;
   if (!scan.fields.length) throw new Error('No supported, visible form fields found. Embedded frames and custom controls are not supported yet.');
   const { apiKey } = await chrome.storage.local.get('apiKey');
-  const next = [];
-  for (let offset = 0; offset < scan.fields.length; offset += 12) {
-    signal.throwIfAborted();
-    const batch = scan.fields.slice(offset, offset + 12);
-    const candidates = batch.map(field => answerCandidates(field, profile, sources));
-    status(`Matching profile details to fields ${offset + 1} to ${Math.min(offset + 12, scan.fields.length)}…`);
-    const questions = Object.fromEntries(batch.map((field, i) => [field.id, answerQuestion(field, candidates[i])]));
-    const answers = await decide(apiKey, { profile, purpose: 'Answer only from the profile owner’s evidence. Skip unknowns.' }, questions, { signal });
-    for (const [i, field] of batch.entries()) next.push({ field, answer: selectedCandidate(answers[field.id], candidates[i]) });
-  }
+  const next = await suggestAnswers(scan.fields.filter(field => field.type !== 'file'), profile, sources, { apiKey, signal, onProgress: status });
   signal.throwIfAborted();
   suggestions = next;
   renderAnswers();
