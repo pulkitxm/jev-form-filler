@@ -36,7 +36,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === 'fill-details' && tab?.id) void startFill(tab.id);
 });
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
-  if (sender.id !== chrome.runtime.id || sender.tab || message?.type !== 'FILL_DETAILS' || !Number.isInteger(message.tabId)) return;
+  if (sender.id !== chrome.runtime.id || sender.url !== chrome.runtime.getURL('popup.html') || message?.type !== 'FILL_DETAILS' || !Number.isInteger(message.tabId)) return;
   void startFill(message.tabId);
   respond({ accepted: true });
 });

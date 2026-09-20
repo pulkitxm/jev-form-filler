@@ -50,6 +50,12 @@ try {
   });
   const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
   const id = new URL(worker.url()).host;
+  await worker.evaluate(async () => {
+    for (let attempt = 0; ; attempt++) {
+      try { await chrome.contextMenus.update('fill-details', { title: 'Fill Details' }); return; }
+      catch (error) { if (attempt === 20) throw error; await new Promise(resolve => setTimeout(resolve, 100)); }
+    }
+  });
   const form = await context.newPage();
   await form.goto('https://forms.test/apply');
   const tabId = await worker.evaluate(async () => (await chrome.tabs.query({ url: 'https://forms.test/*' }))[0].id);
@@ -180,23 +186,22 @@ try {
   let popup = await context.newPage();
   await form.bringToFront();
   await popup.goto(`chrome-extension://${id}/popup.html`);
-  await popup.locator('#fill').waitFor();
+  await popup.getByRole('button', { name: 'Fill Details', exact: true }).waitFor();
+  const requestsBeforeFill = requests;
+  await popup.locator('#fill').click();
+  await popup.getByText('4 fields filled. 1 left unchanged. Review the form before submitting.', { exact: true }).waitFor();
+  assert.ok(requests > requestsBeforeFill);
   assert.equal(await worker.evaluate(async () => (await chrome.tabs.query({})).length), tabsBefore + 1);
-  assert.equal(await popup.locator('.answer').count(), 5);
-  assert.equal(await popup.getByLabel('Answer for Full name').inputValue(), 'Alex Morgan');
-  assert.equal(await popup.locator('.heading input:checked').count(), 4);
+  assert.equal(await form.locator('[name="name"]').inputValue(), 'Alex Morgan');
+  assert.equal(await form.locator('[name="company"]').inputValue(), 'Keep my existing company');
+  assert.equal(await form.evaluate(() => window.submissions), 0);
+  await popup.setViewportSize({ width: 410, height: 240 });
   await popup.screenshot({ path: 'artifacts/popup.png' });
   await popup.emulateMedia({ colorScheme: 'dark' });
   assert.equal(await popup.evaluate(() => getComputedStyle(document.documentElement).backgroundColor), 'rgb(23, 22, 32)');
   await popup.screenshot({ path: 'artifacts/popup-dark.png' });
-  await popup.locator('#fill').click();
-  await popup.getByText('4 fields filled. 0 skipped. Review the form before submitting.', { exact: true }).waitFor();
-  assert.equal(await form.locator('[name="name"]').inputValue(), 'Alex Morgan');
-  assert.equal(await form.locator('[name="company"]').inputValue(), 'Keep my existing company');
-  assert.equal(await form.evaluate(() => window.submissions), 0);
   const requestsBeforeReopen = requests;
   await popup.close();
-  await form.bringToFront();
   popup = await context.newPage();
   await form.bringToFront();
   await popup.goto(`chrome-extension://${id}/popup.html`);
@@ -205,8 +210,13 @@ try {
   await popup.locator('#undo').click();
   await popup.getByText('4 fields restored.', { exact: true }).waitFor();
   assert.equal(await form.locator('[name="name"]').inputValue(), '');
+  await popup.locator('#fill').click();
   await popup.close();
-  console.log('PASS: popup document automatically suggests answers, respects existing values, fills without submitting, reopens without another request, and supports undo and system dark mode.');
+  await form.waitForFunction(() => document.querySelector('[name="name"]').value === 'Alex Morgan');
+  await form.getByText('4 fields filled. 1 left unchanged. Review the form before submitting.', { exact: true }).waitFor();
+  assert.equal(await form.evaluate(() => window.submissions), 0);
+  assert.ok(manifest.permissions.includes('contextMenus'));
+  console.log('PASS: one-click background filling, page progress, preservation of existing values, undo, popup closure during filling, and system dark mode.');
 
   await form.goto('https://portfolio.test/');
   await app.locator('#import-open').click();

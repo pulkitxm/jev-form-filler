@@ -24,11 +24,11 @@ Site access is requested for each imported origin. Source requests omit cookies.
 
 1. For existing imports, choose **Refresh sources** to recover social links, structured identity metadata, and employment context. Browser-check and sign-in pages are excluded. Choose **Build my profile**: unambiguous structured identity facts are extracted directly, and Jev compares contextual candidates from all sources for the remaining fields. Current company and company website are separate fields.
 2. Review the suggestions and choose **Save profile**. You can edit any detail or enter missing information yourself.
-3. Open a form and click the extension toolbar button. The popup automatically scans the form and finds answers from your saved profile.
-4. Review and edit each suggested answer. Existing nonempty fields start unchecked.
-5. Choose **Fill selected**. Inspect the original form before submitting it yourself. **Undo fill** restores unchanged filled values while preserving subsequent edits.
+3. Open a form and click the extension toolbar button. Choose **Fill Details** to detect fields, find supported answers, and fill them automatically. You can also right-click the page or a field and choose **Fill Details** without opening the popup.
+4. Watch the progress message on the page. Filling continues if you close the popup. Existing values and unknown answers stay unchanged.
+5. Inspect the completed form before submitting it yourself. **Undo fill** restores unchanged filled values while preserving subsequent edits.
 
-Completed popup suggestions and Undo remain available when you reopen it on the same page. Choose **Scan again** after changing your profile or the form.
+The popup shows the latest fill status and offers **Undo fill** when you reopen it on the same page.
 
 Jev provides Choice, Score, and Noul decisions. It does not generate free-form prose. This extension uses Choice to select exact profile facts, form options, and existing passages. Questions requiring newly written prose need a manual answer. Missing information stays unanswered. Profile suggestions with low model confidence are shown for explicit review instead of silently discarded. Form-filling decisions still use a 0.65 confidence threshold. Confidence is a model signal, not a guarantee of factual correctness.
 
