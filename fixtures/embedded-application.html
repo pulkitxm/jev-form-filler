@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Product Engineer application</title></head>
+<body>
+<h1>Product Engineer</h1>
+<form>
+<label for="name">Name</label><input id="name" name="name" required>
+<label for="email">Email</label><input id="email" name="email" type="email" required>
+<label for="linkedin">LinkedIn</label><input id="linkedin" name="linkedin" type="url">
+<label for="resume">Resume</label>
+<div role="presentation"><input id="resume" type="file" accept=".pdf" tabindex="-1" style="position:absolute;width:1px;height:1px;clip-path:inset(50%)"><button type="button">Upload File</button></div>
+<label for="about">What makes you a great fit for this role?</label><textarea id="about"></textarea>
+<label for="company">Current company</label><input id="company" value="Keep my company">
+<button type="submit">Submit Application</button>
+</form>
+<script>
+window.submissions = 0;
+window.changes = [];
+document.querySelector('form').onsubmit = event => { event.preventDefault(); window.submissions++; };
+document.querySelector('form').onchange = event => window.changes.push(event.target.id);
+</script>
+</body>
+</html>

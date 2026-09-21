@@ -21,7 +21,7 @@ export function inspectForm() {
     if (fields.length === 60) break;
   }
   globalThis.__jevFormSession = { token, url: location.href, elements, undo: [] };
-  return { token, url: location.href, title: document.title, fields };
+  return { token, url: location.href, title: document.title, fields, frames: [...document.querySelectorAll('iframe')].map(node => ({ url: node.src, visible: visible(node) && !node.closest('[inert]') })) };
 }
 export function applyAnswers(token, answers) {
   const session = globalThis.__jevFormSession;

@@ -31,7 +31,7 @@ export async function fillDetails({ execute, profile, sources, apiKey, progress 
   if (!Object.values(profile).some(fact => fact.value) && !sources.some(source => !source.excluded) && !files.length) throw new Error('Save your details or files in Manage profile first.');
   await progress('Detecting form fields…');
   const scan = await execute(inspectForm);
-  if (!scan.fields.length) throw new Error('No supported form fields found on this page.');
+  if (!scan.fields.length) throw new Error('No supported form fields found. Open the Application tab or application form, then click Fill Details again.');
   if (scan.fields.some(field => field.type !== 'file' && !field.value.trim()) && !apiKey) throw new Error('Connect your TypeSafe API key in Manage profile first.');
   const suggestions = await suggestAnswers(scan.fields.filter(field => field.type !== 'file' && !field.value.trim()), profile, sources, { apiKey, onProgress: progress });
   const chosen = suggestions.filter(item => item.answer).map(item => ({ id: item.field.id, value: item.answer.value }));

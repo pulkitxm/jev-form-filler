@@ -20,8 +20,23 @@ export async function executeForm(tabId, func, args = []) {
     const missing = await framePermissions(tabId);
     if (missing.length) throw new Error('This page embeds a form from another site. Open the extension popup and click Fill Details to allow access to the embedded form.');
     const results = await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, func, args });
-    const sessions = results.filter(item => item.result?.fields.length).map(item => ({ documentId: item.documentId, frameId: item.frameId, token: item.result.token }));
-    const fields = results.flatMap(item => (item.result?.fields || []).map(field => ({ ...field, id: `${item.frameId}:${field.id}` })));
+    const included = new Set(results.filter(item => item.frameId === 0));
+    for (const parent of included) {
+      for (const frame of parent.result?.frames || []) {
+        if (!frame.visible || !/^https?:/.test(frame.url)) continue;
+        const origin = new URL(frame.url).origin;
+        const siblings = parent.result.frames.filter(item => /^https?:/.test(item.url) && new URL(item.url).origin === origin);
+        const candidates = results.filter(item => !included.has(item) && item.result?.url === frame.url);
+        if (candidates.length === 1 && !siblings.some(item => !item.visible && item.url === frame.url)) included.add(candidates[0]);
+        else if (siblings.length === 1) {
+          const navigated = results.filter(item => !included.has(item) && /^https?:/.test(item.result?.url || '') && new URL(item.result.url).origin === origin);
+          if (navigated.length === 1) included.add(navigated[0]);
+        }
+      }
+    }
+    const documents = [...included];
+    const sessions = documents.filter(item => item.result?.fields.length).map(item => ({ documentId: item.documentId, frameId: item.frameId, token: item.result.token }));
+    const fields = documents.flatMap(item => (item.result?.fields || []).map(field => ({ ...field, id: `${item.frameId}:${field.id}` })));
     const page = results.find(item => item.frameId === 0)?.result || results[0]?.result;
     return { token: sessions, fields, title: page?.title || '', url: page?.url || '' };
   }

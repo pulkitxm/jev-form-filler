@@ -76,6 +76,7 @@ try {
   } else {
     $('#page').textContent = tab.title || 'Current form';
     requiredOrigins = await framePermissions(tabId);
-    render((await chrome.storage.session.get(`fill:${tabId}`))[`fill:${tabId}`]);
+    const state = (await chrome.storage.session.get(`fill:${tabId}`))[`fill:${tabId}`];
+    render(state || (requiredOrigins.length ? { message: `Fill Details will request access to the embedded form on ${requiredOrigins.map(origin => new URL(origin).hostname).join(', ')}.` } : undefined));
   }
 } catch (error) { render({ message: error.message }); }
