@@ -1,9 +1,11 @@
+import { executeForm, framePermissions } from './frame-executor.js';
 import { socialKind } from './sources.js';
 import { undoAnswers } from './forms.js';
 
 const $ = selector => document.querySelector(selector);
 let tabId;
 let current;
+let requiredOrigins = [];
 function render(state) {
   current = state;
   $('#status').textContent = state?.message || 'Fill saved details into the current form.';
@@ -48,13 +50,17 @@ $('#import-profile').onclick = () => chrome.tabs.create({ url: chrome.runtime.ge
 $('#manage').onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL(`app.html${tabId ? `?tab=${tabId}` : ''}`) });
 $('#fill').onclick = async () => {
   render({ loading: true, message: 'Preparing to fill your details…' });
-  try { await chrome.runtime.sendMessage({ type: 'FILL_DETAILS', tabId }); }
+  try {
+    if (requiredOrigins.length && !await chrome.permissions.request({ origins: requiredOrigins })) throw new Error('Allow access to the embedded form to fill this page.');
+    requiredOrigins = [];
+    await chrome.runtime.sendMessage({ type: 'FILL_DETAILS', tabId });
+  }
   catch (error) { render({ message: error.message }); }
 };
 $('#undo').onclick = async () => {
   try {
-    const [result] = await chrome.scripting.executeScript({ target: { tabId }, func: undoAnswers, args: [current.token] });
-    await chrome.storage.session.set({ [`fill:${tabId}`]: { message: `${result.result} fields restored.`, loading: false } });
+    const restored = await executeForm(tabId, undoAnswers, [current.token]);
+    await chrome.storage.session.set({ [`fill:${tabId}`]: { message: `${restored} fields restored.`, loading: false } });
   } catch (error) { render({ message: error.message }); }
 };
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -69,6 +75,7 @@ try {
     $('#fill').disabled = true;
   } else {
     $('#page').textContent = tab.title || 'Current form';
+    requiredOrigins = await framePermissions(tabId);
     render((await chrome.storage.session.get(`fill:${tabId}`))[`fill:${tabId}`]);
   }
 } catch (error) { render({ message: error.message }); }

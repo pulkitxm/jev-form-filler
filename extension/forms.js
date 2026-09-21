@@ -1,5 +1,10 @@
 export function inspectForm() {
   const visible = node => node.getClientRects().length > 0 && getComputedStyle(node).visibility !== 'hidden';
+  let ancestor = window;
+  while (ancestor.frameElement) {
+    if (!visible(ancestor.frameElement) || ancestor.frameElement.closest('[inert]')) return { fields: [], url: location.href, title: document.title };
+    ancestor = ancestor.parent;
+  }
   const fields = [];
   const elements = new Map();
   const token = crypto.randomUUID();

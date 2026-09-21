@@ -1,3 +1,4 @@
+import { executeForm } from './frame-executor.js';
 import { listFiles, saveFile, deleteFile, clearFiles, matchFiles, acceptsFile, filePayload } from './files.js';
 import { profileFields, safeUrl, inferProfile, selectedCandidate, decide, answerCandidates, answerQuestion, suggestAnswers } from './model.js';
 import { parseHtml, socialKind, extractionVersion, isBlockedPage, discoverPages, fetchText, importGithub, capturePage } from './sources.js';
@@ -144,12 +145,7 @@ async function buildProfile(signal) {
 }
 async function execute(func, args = []) {
   if (!targetId) throw new Error('Open the target page and click the extension toolbar button first.');
-  try {
-    const result = await chrome.scripting.executeScript({ target: { tabId: targetId }, func, args });
-    if (result[0]?.error) throw new Error(result[0].error.message);
-    if (result[0]?.result === undefined) throw new Error('No page result');
-    return result[0].result;
-  } catch (error) { throw new Error(`Cannot access this page. Open a normal website and click the toolbar button again. ${error.message}`); }
+  return executeForm(targetId, func, args);
 }
 function renderAnswers() {
   $('#answers').replaceChildren();
@@ -393,7 +389,7 @@ $('#scan').onclick = () => run(async signal => {
   scan = await execute(inspectForm);
   $('#target-title').textContent = scan.title;
   $('#target-url').textContent = scan.url;
-  if (!scan.fields.length) throw new Error('No supported, visible form fields found. Embedded frames and custom controls are not supported yet.');
+  if (!scan.fields.length) throw new Error('No supported, visible form fields found. Open the application form, then scan again.');
   const { apiKey } = await chrome.storage.local.get('apiKey');
   const next = await suggestAnswers(scan.fields.filter(field => field.type !== 'file'), profile, sources, { apiKey, signal, onProgress: status });
   const files = await listFiles();
