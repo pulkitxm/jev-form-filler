@@ -11,6 +11,10 @@ export function expandEvidence(items) {
   for (const item of items) {
     add(item);
     const context = item.context || item.value;
+    if (/skills?|technologies|tech stack|programming languages?|languages?|knowsabout/i.test(item.kind)) {
+      const values = item.value.split(/\s*(?:,|;|\||•|\n)\s*/).map(value => value.trim()).filter(Boolean);
+      if (values.length > 1) for (const [listPosition, value] of values.entries()) add({ ...item, kind: 'Programming language or skill', value, context: `${item.kind}: ${item.value}. ${context}`, derivedFromList: true, listPosition });
+    }
     if (['location', 'address', 'Location'].includes(item.kind)) {
       const parts = item.value.split(/[,|•]/).map(value => value.trim()).filter(Boolean);
       for (const value of parts) add({ ...item, kind: 'Location component', value, context: `Location: ${item.value}. ${context}` });
@@ -32,10 +36,11 @@ export function rankEvidence(field, items) {
   const label = `${field.label || ''} ${field.autocomplete || ''} ${field.name || ''}`.toLowerCase();
   const tokens = label.match(/[\p{L}\p{N}]{3,}/gu) || [];
   const location = /city|state|province|region|country|postal|zip|address|location/.test(label);
+  const programmingLanguage = /programming language|coding language|go-to language|preferred language|favorite language|favourite language/.test(label);
   return items.map((item, index) => {
     const kind = (item.kind || '').toLowerCase();
     const context = `${kind} ${item.context || ''} ${item.value}`.toLowerCase();
-    const score = (item.saved ? 8 : 0) + tokens.reduce((sum, token) => sum + (kind.includes(token) ? 12 : context.includes(token) ? 3 : 0), 0) + (location && /location|city|state|country|address|region|postal/.test(kind) ? 12 : 0);
+    const score = (item.saved ? 8 : 0) + tokens.reduce((sum, token) => sum + (kind.includes(token) ? 12 : context.includes(token) ? 3 : 0), 0) + (location && /location|city|state|country|address|region|postal/.test(kind) ? 12 : 0) + (programmingLanguage && /programming language|skills?|technolog|tech stack|knowsabout/.test(kind) ? 24 : 0);
     return { item, score, index };
   }).sort((a, b) => b.score - a.score || a.index - b.index).map(entry => entry.item);
 }

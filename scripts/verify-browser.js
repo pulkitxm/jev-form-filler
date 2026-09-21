@@ -24,7 +24,7 @@ try {
     return route.fulfill({ contentType: 'text/html', body: profileHtml });
   });
   await context.route('https://forms.test/**', route => route.fulfill({ contentType: 'text/html', body: formHtml }));
-  await context.route('https://api.github.com/users/alex-example/repos?*', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify([{ name: 'canvas-kit', description: 'Accessible components for creative tools', language: 'TypeScript', html_url: 'https://github.com/alex-example/canvas-kit', fork: false }]) }));
+  await context.route('https://api.github.com/users/alex-example/repos?*', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify([{ name: 'canvas-kit', description: 'Accessible components for creative tools', language: 'TypeScript', html_url: 'https://github.com/alex-example/canvas-kit', fork: false }, { name: 'product-site', description: 'Product website', language: 'JavaScript', html_url: 'https://github.com/alex-example/product-site', fork: false }, { name: 'data-tools', description: 'Developer data tools', language: 'Python', html_url: 'https://github.com/alex-example/data-tools', fork: false }]) }));
   await context.route('https://api.github.com/users/alex-example', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ name: 'Alex Morgan', bio: 'Product engineer building accessible web tools.', company: 'Northstar Studio', location: 'London', html_url: 'https://github.com/alex-example', blog: 'https://portfolio.test/' }) }));
   await context.route('https://api.typesafe.ai/v1/systemone', async route => {
     requests++;
@@ -41,7 +41,7 @@ try {
         choice = Object.entries(question.criteria).find(([, candidate]) => candidate.kind === kind)?.[0] || 'skip';
       } else {
         const label = question.instructions.field.toLowerCase();
-        const desired = label.includes('name') ? 'Alex Morgan' : label.includes('email') ? 'alex@example.test' : label.includes('location') ? 'London' : label.includes('about') ? 'I build accessible web products and open-source developer tools.' : label.includes('company') ? 'Northstar Studio' : null;
+        const desired = label.includes('name') ? 'Alex Morgan' : label.includes('email') ? 'alex@example.test' : label.includes('location') ? 'London' : label.includes('about') ? 'I build accessible web products and open-source developer tools.' : label.includes('programming language') ? 'TypeScript' : label.includes('company') ? 'Northstar Studio' : null;
         choice = Object.entries(question.criteria).find(([, candidate]) => typeof candidate === 'object' && candidate.value === desired)?.[0] || 'skip';
       }
       answers[key] = { choice, confidence: .98 };
@@ -97,23 +97,24 @@ try {
   await app.locator('[data-view="fill"]').click();
   await app.locator('#scan').click();
   await app.locator('#apply').waitFor();
-  assert.equal(await app.locator('.answer-card').count(), 5);
-  assert.equal(await app.locator('[data-answer]:checked').count(), 4);
+  assert.equal(await app.locator('.answer-card').count(), 6);
+  assert.equal(await app.locator('[data-answer]:checked').count(), 5);
   assert.equal(await app.locator('.answer-card label').nth(2).textContent(), 'LocationSource-backed suggestion');
   await app.locator('#dismiss-status').click();
   await app.screenshot({ animations: 'disabled', path: 'artifacts/answer-review.png', fullPage: true });
   await app.locator('#apply').click();
-  await app.getByText('4 fields filled. 0 skipped. Nothing was submitted.', { exact: true }).waitFor();
+  await app.getByText('5 fields filled. 0 skipped. Nothing was submitted.', { exact: true }).waitFor();
   assert.equal(await form.locator('[name="name"]').inputValue(), 'Alex Morgan');
   assert.equal(await form.locator('[name="email"]').inputValue(), 'alex@example.test');
   assert.equal(await form.locator('[name="location"]').inputValue(), 'london');
+  assert.equal(await form.locator('[name="programming-language"]').inputValue(), 'TypeScript');
   assert.equal(await form.locator('[name="company"]').inputValue(), 'Keep my existing company');
   assert.equal(await form.locator('[name="password"]').inputValue(), '');
   assert.equal(await form.evaluate(() => window.submissions), 0);
   await form.screenshot({ path: 'artifacts/filled-form.png', fullPage: true });
   await form.locator('[name="name"]').fill('Edited after filling');
   await app.locator('#undo').click();
-  await app.getByText('Restored 3 fields. Any values you edited afterward were left alone.', { exact: true }).waitFor();
+  await app.getByText('Restored 4 fields. Any values you edited afterward were left alone.', { exact: true }).waitFor();
   assert.equal(await form.locator('[name="name"]').inputValue(), 'Edited after filling');
   assert.equal(await form.locator('[name="email"]').inputValue(), '');
   await form.locator('[name="name"]').fill('');
@@ -121,7 +122,7 @@ try {
   await app.locator('#apply').waitFor();
   await form.locator('[name="email"]').fill('changed@example.test');
   await app.locator('#apply').click();
-  await app.getByText(/3 fields filled. 1 skipped/).waitFor();
+  await app.getByText(/4 fields filled. 1 skipped/).waitFor();
   assert.equal(await form.locator('[name="email"]').inputValue(), 'changed@example.test');
   apiStatus = 401;
   await app.locator('#scan').click();
@@ -191,10 +192,11 @@ try {
   await popup.getByRole('button', { name: 'Fill Details', exact: true }).waitFor();
   const requestsBeforeFill = requests;
   await popup.locator('#fill').click();
-  await popup.getByText('4 fields filled. 1 left unchanged. Review the form before submitting.', { exact: true }).waitFor();
+  await popup.getByText('5 fields filled. 1 left unchanged. Review the form before submitting.', { exact: true }).waitFor();
   assert.ok(requests > requestsBeforeFill);
   assert.equal(await worker.evaluate(async () => (await chrome.tabs.query({})).length), tabsBefore + 1);
   assert.equal(await form.locator('[name="name"]').inputValue(), 'Alex Morgan');
+  assert.equal(await form.locator('[name="programming-language"]').inputValue(), 'TypeScript');
   assert.equal(await form.locator('[name="company"]').inputValue(), 'Keep my existing company');
   assert.equal(await form.evaluate(() => window.submissions), 0);
   await popup.setViewportSize({ width: 410, height: 240 });
@@ -210,12 +212,12 @@ try {
   await popup.locator('#undo').waitFor();
   assert.equal(requests, requestsBeforeReopen);
   await popup.locator('#undo').click();
-  await popup.getByText('4 fields restored.', { exact: true }).waitFor();
+  await popup.getByText('5 fields restored.', { exact: true }).waitFor();
   assert.equal(await form.locator('[name="name"]').inputValue(), '');
   await popup.locator('#fill').click();
   await popup.close();
   await form.waitForFunction(() => document.querySelector('[name="name"]').value === 'Alex Morgan');
-  await form.getByText('4 fields filled. 1 left unchanged. Review the form before submitting.', { exact: true }).waitFor();
+  await form.getByText('5 fields filled. 1 left unchanged. Review the form before submitting.', { exact: true }).waitFor();
   assert.equal(await form.evaluate(() => window.submissions), 0);
   assert.ok(manifest.permissions.includes('contextMenus'));
   console.log('PASS: one-click background filling, page progress, preservation of existing values, undo, popup closure during filling, and system dark mode.');

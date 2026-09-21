@@ -21,6 +21,13 @@ test('missing answers fail instead of silently filling', async () => {
 test('select candidates retain actual option values', () => {
   assert.deepEqual(answerCandidates({ options: [{ label: 'Choose', value: '' }, { label: 'Remote', value: 'remote' }] }, {}, []), [{ label: 'Remote', value: 'remote', source: 'Profile match' }]);
 });
+test('singular programming language questions receive individual saved skill candidates', () => {
+  const profile = { skills: { value: 'TypeScript, JavaScript, Python', source: 'Your profile', saved: true } };
+  const candidates = answerCandidates({ label: "What's your go-to programming language?", type: 'text' }, profile, []);
+  assert.deepEqual(candidates.map(item => item.value), ['TypeScript', 'JavaScript', 'Python']);
+  assert.ok(candidates.every(item => item.kind === 'Programming language or skill'));
+  assert.ok(candidates.every(item => item.context.includes('TypeScript, JavaScript, Python')));
+});
 test('abort signals stop TypeSafe work without a fallback answer', async () => {
   const controller = new AbortController();
   controller.abort();
